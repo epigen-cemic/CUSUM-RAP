@@ -9,7 +9,7 @@ library(rlang)
 
 ## plot_cusum_series_unit:
 ##  - Plot observed vs expected counts for ONE analysis unit
-##    (which may be a country, province, department, or fraction).
+##    (which may be a country, province, department, or censal_fraction).
 ##
 ## Arguments:
 ##  - df_unit: data for a single analysis unit (already filtered)
