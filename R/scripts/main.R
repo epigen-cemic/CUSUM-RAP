@@ -10,12 +10,7 @@
 ##   5) Generate plots and save outputs.
 ## -----------------------------------------------------------
 
-library(dplyr)
-library(ggplot2)
 
-source("R/01_functions_cusum.R")
-source("R/02_functions_plot.R")
-source("R/03_functions_io.R")
 
 ## -----------------------------------------------------------
 ## 1) User-configurable parameters

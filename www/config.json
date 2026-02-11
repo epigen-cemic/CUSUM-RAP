@@ -1,0 +1,9 @@
+{
+  "Global": {
+    "levels": ["country", "Region", "District"]
+  },
+  
+  "Argentina": {
+    "levels": ["country", "province", "department", "fraction"]
+  }
+}
