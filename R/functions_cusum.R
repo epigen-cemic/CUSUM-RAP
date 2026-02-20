@@ -29,8 +29,8 @@
 #'
 #' @export
 cusum_core <- function(y, mu,
-                       k = 1.04,
-                       h = 2.26,
+                       k,       # No default: User MUST provide this
+                       h,       # No default: User MUST provide this
                        trans = c("standard", "anscombe"),
                        reset = FALSE) {
   
@@ -41,38 +41,32 @@ cusum_core <- function(y, mu,
   }
   
   n <- length(y)
-  S <- numeric(n)   # CUSUM process S_t
+  S <- numeric(n)
   alarm <- logical(n)
-  z <- numeric(n)   # standardized scores
+  z <- numeric(n)
   
   for (t in seq_len(n)) {
     
-    ## 1) Standardized residual or transformed score
+    ## 1) Standardized residual
     if (trans == "standard") {
-      # Simple standardization for Poisson-like counts:
-      #   z_t = (Y_t - mu_t) / sqrt(mu_t)
-      z[t] <- (y[t] - mu[t]) / sqrt(mu[t])
-      
+      denom <- sqrt(mu[t])
+      if (denom < 1e-9) denom <- 1e-9 
+      z[t] <- (y[t] - mu[t]) / denom
     } else if (trans == "anscombe") {
-      # Anscombe transformation for Poisson-like counts:
-      #   A(Y) = 2 * sqrt(Y + 3/8)
       z[t] <- 2 * sqrt(y[t] + 3/8) - 2 * sqrt(mu[t] + 3/8)
     }
     
-    ## 2) CUSUM increment:
-    ##    x_t = z_t - k
+    ## 2) CUSUM increment
     incr <- z[t] - k
     
-    ## 3) One-sided CUSUM for increases:
-    ##    S_t = max(0, S_{t-1} + x_t)
+    ## 3) One-sided CUSUM
     if (t == 1) {
       S[t] <- max(0, incr)
     } else {
       S[t] <- max(0, S[t - 1] + incr)
     }
     
-    ## 4) Alarm rule:
-    ##    alarm_t = TRUE if S_t >= h
+    ## 4) Alarm rule
     if (S[t] >= h) {
       alarm[t] <- TRUE
       if (reset) {
@@ -81,11 +75,7 @@ cusum_core <- function(y, mu,
     }
   }
   
-  list(
-    cusum = S,
-    alarm = alarm,
-    z = z
-  )
+  list(cusum = S, alarm = alarm, z = z)
 }
 
 
@@ -110,6 +100,8 @@ cusum_core <- function(y, mu,
 #' @param h Numeric. Decision threshold for CUSUM. Defaults to 2.26.
 #' @param trans Character string. Transformation method (\code{"standard"} or \code{"anscombe"}).
 #' @param reset Logical. Whether to reset CUSUM after an alarm. Defaults to \code{FALSE}.
+#' @param fixed_mu Numeric (Optional). If provided, this fixed value is used as the expected count 
+#'                 for all time points, bypassing the GLM baseline calculation.
 #'
 #' @return The input \code{df_unit} with additional columns:
 #' \item{mu_hat}{Estimated expected counts.}
@@ -122,41 +114,36 @@ cusum_core <- function(y, mu,
 run_cusum_for_unit <- function(df_unit,
                                baseline_filter,
                                detect_filter,
-                               k      = 1.04,
-                               h      = 2.26,
+                               k,       # Mandatory
+                               h,       # Mandatory
                                trans  = "standard",
-                               reset  = FALSE) {
+                               reset  = FALSE,
+                               fixed_mu = NULL) {
   
   required_cols <- c("time_index", "n_cases")
   missing_cols <- setdiff(required_cols, names(df_unit))
   if (length(missing_cols) > 0) {
-    stop("df_unit is missing required columns: ",
-         paste(missing_cols, collapse = ", "))
+    stop("df_unit is missing required columns: ", paste(missing_cols, collapse = ", "))
   }
   
-  # Extract variables
   y <- df_unit$n_cases
   t <- df_unit$time_index
   
-  # Identify baseline and detection periods
   idx_base <- baseline_filter(df_unit)
   idx_det  <- detect_filter(df_unit)
   
-  if (!any(idx_base)) stop("baseline_filter selects no rows for this unit.")
+  # Manual vs Automatic Baseline Logic
+  if (!is.null(fixed_mu)) {
+    mu_hat <- rep(as.numeric(fixed_mu), length(y))
+  } else {
+    if (!any(idx_base)) stop("baseline_filter selects no rows for this unit (and no fixed_mu provided).")
+    fit <- glm(y ~ t, family = poisson(), subset = idx_base)
+    mu_hat <- as.numeric(predict(fit, type = "response"))
+  }
+  
   if (!any(idx_det))  stop("detect_filter selects no rows for this unit.")
   
-  ## 1) Baseline model for expected counts (mu_t)
-  ##    Simple Poisson GLM with linear trend in time.
-  ##    Can be extended (seasonality, covariates, etc.) if needed.
-  fit <- glm(
-    y ~ t,
-    family = poisson(),
-    subset = idx_base
-  )
-  
-  mu_hat <- as.numeric(predict(fit, type = "response"))
-  
-  ## 2) Apply CUSUM to the detection period for this unit
+  # Pass k and h explicitly
   res <- cusum_core(
     y   = y[idx_det],
     mu  = mu_hat[idx_det],
@@ -166,7 +153,6 @@ run_cusum_for_unit <- function(df_unit,
     reset = reset
   )
   
-  ## 3) Attach results back to df_unit
   df_unit$mu_hat <- mu_hat
   df_unit$cusum  <- NA_real_
   df_unit$alarm  <- FALSE
@@ -178,6 +164,7 @@ run_cusum_for_unit <- function(df_unit,
   
   df_unit
 }
+
 
 
 #' @title Run CUSUM on All Units
@@ -196,6 +183,7 @@ run_cusum_for_unit <- function(df_unit,
 #' @param h Numeric. Decision threshold. Defaults to 2.26.
 #' @param trans Character string. Transformation method.
 #' @param reset Logical. Whether to reset CUSUM after an alarm.
+#' @param fixed_mu Numeric (Optional). If provided, forces a manual baseline.
 #'
 #' @return A tibble containing the original data with appended CUSUM results,
 #'         ungrouped.
@@ -207,10 +195,11 @@ run_cusum_all_units <- function(df,
                                 unit_var        = "analysis_unit_id",
                                 baseline_filter,
                                 detect_filter,
-                                k      = 1.04,
-                                h      = 2.26,
+                                k,       # Mandatory
+                                h,       # Mandatory
                                 trans  = "standard",
-                                reset  = FALSE) {
+                                reset  = FALSE,
+                                fixed_mu = NULL) {
   
   unit_sym <- rlang::sym(unit_var)
   
@@ -224,7 +213,8 @@ run_cusum_all_units <- function(df,
         k      = k,
         h      = h,
         trans  = trans,
-        reset  = reset
+        reset  = reset,
+        fixed_mu = fixed_mu
       )
     ) %>%
     dplyr::ungroup()

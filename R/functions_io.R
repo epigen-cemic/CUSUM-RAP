@@ -9,16 +9,26 @@
 #'
 #' @description
 #' Reads the weekly aggregated rumor data produced by API-Pop.
-#' Expects a CSV file containing geographic columns and weekly case counts.
+#' Automatically detects if the file uses commas (,) or semicolons (;) as separators.
 #'
 #' @param path Character string. The file path to the CSV file.
 #'
 #' @return A tibble (data frame) containing the raw data.
 #'
-#' @importFrom readr read_csv
+#' @importFrom readr read_delim read_csv read_csv2
 #' @export
 read_api_pop_output <- function(path) {
-  read_csv(path, show_col_types = FALSE)
+  # Read the first line to guess the separator
+  first_line <- readLines(path, n = 1)
+  
+  # Check if the header contains a semicolon
+  if (grepl(";", first_line)) {
+    # Use read_csv2 for semicolon-separated files (common in LATAM/Europe)
+    return(readr::read_csv2(path, show_col_types = FALSE))
+  } else {
+    # Use read_csv for standard comma-separated files
+    return(readr::read_csv(path, show_col_types = FALSE))
+  }
 }
 
 

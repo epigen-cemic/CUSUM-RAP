@@ -24,10 +24,10 @@ server <- function(input, output, session) {
   
   # When the user's browser session ends, kill the R process
   # Specific for the portable version
-  session$onSessionEnded(function() {
-    stopApp()
-    q("no")
-  })
+#  session$onSessionEnded(function() {
+#    stopApp()
+#    q("no")
+#  })
   
 }
 

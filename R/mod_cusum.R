@@ -26,21 +26,47 @@ cusumUI <- function(id) {
       fileInput(ns("file_upload"), "Upload Rumor CSV", 
                 accept = c(".csv", "text/csv", "text/comma-separated-values")),
       
-      # CHANGE HERE: Set choices to NULL initially
       selectInput(ns("geo_level"), "Geographic Level:",
                   choices = NULL, 
                   selected = NULL),
       
-      # ... rest of your UI inputs ...
-      numericInput(ns("param_h"), "Threshold (h):", value = 3, step = 0.1),
-      numericInput(ns("param_k"), "Reference (k):", value = 1.04, step = 0.01),
-      numericInput(ns("baseline_weeks"), "Baseline Length (Weeks):", value = 52),
+      hr(),
+      h4("2. Baseline Settings"),
+      
+      radioButtons(ns("baseline_method"), "Baseline Calculation Method:",
+                   choices = c("Automatic (Historical Data)" = "auto",
+                               "Manual (Fixed Value)" = "manual"),
+                   selected = "auto"),
+      
+      # Conditional panel for Manual Input
+      conditionalPanel(
+        condition = paste0("input['", ns("baseline_method"), "'] == 'manual'"),
+        numericInput(ns("manual_mu_value"), "Fixed Expected Count (Mu):", 
+                     value = NA, min = 0)
+      ),
+      
+      # Conditional panel for Automatic Input
+      # Replaced the manual numeric input with a fixed help text.
+      conditionalPanel(
+        condition = paste0("input['", ns("baseline_method"), "'] == 'auto'"),
+        helpText("The baseline will be automatically calculated using all available historical data prior to the last 52 weeks.")
+      ),
       
       hr(),
+      h4("3. CUSUM Parameters"),
+      
+      numericInput(ns("param_h"), "Threshold (h):", 
+                   value = NA, step = "0.001", min = 0), 
+      
+      numericInput(ns("param_k"), "Reference (k):", 
+                   value = NA, step = "0.001", min = 0), 
+      
+      helpText("Note: Standard values are k=1.04 and h=2.26"), 
+      
+      br(),
       actionButton(ns("run_analysis"), "Run Analysis", class = "btn-primary", width = "100%")
     ),
     mainPanel(
-      # ... rest of main panel ...
       uiOutput(ns("error_message")),
       tabsetPanel(
         tabPanel("Overview", plotOutput(ns("plot_heatmap"), height = "600px")),
@@ -88,25 +114,18 @@ cusumServer <- function(id) {
     # 0. INITIALIZATION: Read Config & Populate Dropdown
     # ---------------------------------------------------------
     observe({
-      # 1. Read the config file safely inside the server
       config_path <- here::here("www/config.json")
       
-      # Check if file exists to avoid crashing
       if(file.exists(config_path)){
         config_data <- jsonlite::fromJSON(config_path)
-        
-        # 2. Extract levels
-        # Assuming you want Argentina, or you can make this dynamic later
         raw_choices <- config_data$Argentina$levels 
         
-        # Create named vector: c("Fraction" = "fraction", "Province" = "province")
         clean_choices <- raw_choices
         names(clean_choices) <- tools::toTitleCase(raw_choices)
         
-        # 3. Update the UI
         updateSelectInput(session, "geo_level",
                           choices = clean_choices,
-                          selected = "province") # Set a default if available
+                          selected = "province") 
       }
     })
     
@@ -115,60 +134,81 @@ cusumServer <- function(id) {
     # ---------------------------------------------------------
     analyzed_data <- eventReactive(input$run_analysis, {
       req(input$file_upload)
-      req(input$geo_level) # Wait until the dropdown is populated
+      req(input$geo_level)
       
-      # --- MAPPING LOGIC ---
+      # --- VALIDATION CHECKS ---
+      
+      if (is.na(input$param_h)) {
+        showNotification("Error: Please enter a value for Threshold (h).", type = "error")
+        validate(need(FALSE, "Waiting for Threshold (h) value..."))
+      }
+      
+      if (is.na(input$param_k)) {
+        showNotification("Error: Please enter a value for Reference (k).", type = "error")
+        validate(need(FALSE, "Waiting for Reference (k) value..."))
+      }
+      
+      fixed_mu_val <- NULL
+      if (input$baseline_method == "manual") {
+        if (is.na(input$manual_mu_value)) {
+          showNotification("Error: Please enter a Fixed Expected Count (Mu).", type = "error")
+          validate(need(FALSE, "Waiting for Manual Mu value..."))
+        }
+        fixed_mu_val <- input$manual_mu_value
+      }
+      
+      # --- DATA LOADING & PREP ---
       selected_level <- input$geo_level
-      
-      # Translate UI selection ("fraction") to internal ID ("censal_censal_fraction")
       internal_geo_level <- switch(selected_level,
                                    "fraction" = "censal_censal_fraction", 
-                                   selected_level # Default
+                                   selected_level 
       )
       
       tryCatch({
         raw_df <- read_api_pop_output(input$file_upload$datapath)
         
-        # Validation
         if (!"n_cases" %in% names(raw_df)) validate(need(FALSE, "Error: Column 'n_cases' missing."))
         if (!is.numeric(raw_df$n_cases))   validate(need(FALSE, "Error: 'n_cases' must be numeric."))
         
-        # --- DATA PREPARATION (Using generic CSV levels) ---
         prepared_df <- prepare_weekly_data_geo(
           df = raw_df, 
           location_level = internal_geo_level, 
-          
-          # Mapping generic CSV headers (level1, level2...) to concepts
           col_country         = "country",
-          col_province        = "level1",    # Province
-          col_department      = "level2",    # Department
-          col_censal_fraction = "level3",    # Fraction
-          
+          col_province        = "level1", 
+          col_department      = "level2", 
+          col_censal_fraction = "level3", 
           col_yearweek        = "week",
           col_cases           = "n_cases"
         )
         
-        # Check baseline length
-        max_week <- max(prepared_df$time_index, na.rm = TRUE)
-        if (max_week < input$baseline_weeks) {
-          showNotification("Warning: Data shorter than baseline.", type = "warning")
+        # --- CALCULATE 52-WEEK WINDOW ---
+        max_week_index <- max(prepared_df$time_index, na.rm = TRUE)
+        
+        if (input$baseline_method == "auto" && max_week_index <= 52) {
+          showNotification("Error: You need more than 52 weeks of historical data to calculate an automatic baseline.", type = "error")
+          validate(need(FALSE, "Insufficient data for automatic baseline."))
         }
         
-        # Run CUSUM
-        cutoff_week <- max_week - input$baseline_weeks
+        # The detection period is strictly the latest 52 weeks in the dataset.
+        # Everything before max_week_index - 52 becomes the baseline.
+        cutoff_week <- max(0, max_week_index - 52)
         
+        # --- RUN CUSUM ---
         results <- run_cusum_all_units(
           df              = prepared_df,
           unit_var        = "analysis_unit_id",
-          baseline_filter = (prepared_df$time_index <= cutoff_week), 
-          detect_filter   = (prepared_df$time_index > cutoff_week),
+          # Using functions here ensures it applies correctly to each group individually!
+          baseline_filter = function(d) d$time_index <= cutoff_week, 
+          detect_filter   = function(d) d$time_index > cutoff_week,
           k               = input$param_k,
-          h               = input$param_h
+          h               = input$param_h,
+          fixed_mu        = fixed_mu_val
         )
         
         return(results)
         
       }, error = function(e) {
+        showNotification(paste("Error:", e$message), type = "error")
         validate(need(FALSE, paste("Error:", e$message)))
       })
     })
