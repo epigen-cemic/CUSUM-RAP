@@ -1,0 +1,149 @@
+/* --- 1. GLOBAL TEXT SELECTION --- */
+/* Ensures black text on white background when highlighting text */
+::selection {
+  background-color: #ffffff !important; 
+  color: #000000 !important;
+}
+
+::-moz-selection {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+/* --- 2. GLOBAL PAGE STYLES --- */
+body { 
+  background-color: #f0f0f0; 
+  color: #616161; 
+}
+
+/* --- 3. TOP NAVIGATION BAR --- */
+.custom-navbar { 
+  background-color: #4a4a4a; 
+  padding: 5px 15px; 
+  color: white; 
+  display: flex; 
+  gap: 20px; 
+}
+
+.custom-navbar a { 
+  color: white; 
+  text-decoration: none; 
+  font-size: 16px; 
+  cursor: pointer; 
+}
+
+.custom-navbar .dropdown { 
+  position: relative; 
+  display: inline-block; 
+}
+
+.custom-navbar .dropdown-content { 
+  display: none; 
+  position: absolute; 
+  background-color: #4a4a4a; 
+  min-width: 200px !important; 
+  width: max-content !important; 
+  z-index: 1000; 
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.5); 
+}
+
+.custom-navbar .dropdown-content a { 
+  color: white !important; 
+  padding: 10px 15px !important; 
+  text-decoration: none !important; 
+  display: block !important; 
+  border-bottom: 1px solid #333 !important; 
+  white-space: nowrap !important; 
+}
+
+.custom-navbar .dropdown-content a:hover { 
+  background-color: #333; 
+}
+
+.custom-navbar .dropdown:hover .dropdown-content { 
+  display: block; 
+}
+
+/* --- 4. SIDEBAR --- */
+.sidebar-dark { 
+  background-color: #4a4a4a; 
+  color: white; 
+  padding: 20px; 
+  height: fit-content;
+  margin-bottom: 20px; 
+}
+
+.sidebar-dark .control-label { 
+  color: white; 
+  font-weight: normal; 
+  font-style: italic; 
+  font-size: 18px; 
+}
+
+.variable-label { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  color: white; 
+  font-style: italic; 
+  margin-bottom: 10px; 
+}
+
+.variable-label span {
+  white-space: nowrap; 
+  margin-right: 15px; 
+}
+
+.variable-label .form-group { 
+  width: 65%; 
+  margin-bottom: 0; 
+}
+
+.variable-label input {
+  background-color: #7a7a7a; 
+  border: none; 
+  color: white;
+  width: 100%;
+}
+
+/* --- 5. MAIN PANEL TABS --- */
+.main-tabs {
+  padding-bottom: 50px; /* Space at bottom of app */
+}
+
+.main-tabs .nav-tabs { 
+  border-bottom: none; 
+  background-color: #4a4a4a; 
+  display: inline-flex; 
+  padding: 0; 
+}
+
+.main-tabs .nav-tabs > li > a { 
+  color: white; 
+  border: none; 
+  border-radius: 0; 
+  padding: 5px 20px; 
+  font-style: italic; 
+}
+
+/* HOVER STATE: Flip to black text when mouse is over tab */
+.main-tabs .nav-tabs > li > a:hover {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border: none !important;
+}
+
+/* ACTIVE STATE: Keep the selected tab dark */
+.main-tabs .nav-tabs > li.active > a { 
+  background-color: #333; 
+  color: white; 
+  border: none; 
+}
+
+/* --- 6. BUTTONS --- */
+/* Fixes for Run Analysis and Download buttons on hover */
+.btn-default:hover {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #333 !important;
+}

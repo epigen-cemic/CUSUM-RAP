@@ -32,173 +32,214 @@ read_api_pop_output <- function(path) {
 }
 
 
-#' @title Prepare Weekly Data (Standardized Columns)
+#' @title Combine and Filter Multiple Uploaded Files
 #'
 #' @description
-#' Aggregates weekly data based on a configuration hierarchy, but expects 
-#' standardized CSV column names (country, level1, level2...) instead of 
-#' specific names (province, department, etc.).
+#' Reads multiple uploaded CSV files, binds their rows into a single dataset, 
+#' standardizes the column names to lowercase, and filters the dataset based 
+#' on user-selected target locations. This "lazy filtering" prevents memory 
+#' overload before applying the gap-filling algorithms.
 #'
-#' @details
-#' This function acts as a translation layer between the user-facing configuration
-#' and the internal data structure.
-#' \enumerate{
-#'   \item It accepts a user-selected level from the config (e.g., "Department").
-#'   \item It maps this level to a standardized column depth (e.g., Department = Index 3 = "level2").
-#'   \item It aggregates the data using these standardized columns.
-#' }
-#' 
-#' The input CSV \strong{must} use the following standardized headers:
-#' \itemize{
-#'   \item \code{country}
-#'   \item \code{level1} (e.g., Province/Region)
-#'   \item \code{level2} (e.g., Department/District)
-#'   \item \code{level3} (Optional)
-#'   \item \code{level4} (Optional)
-#' }
+#' @param file_paths Character vector. The temporary file paths from \code{input$file_upload$datapath}.
+#' @param target_locations Character vector. The specific locations to keep (e.g., c("Comuna 1", "Comuna 2")).
+#' @param geo_col Character string. The standardized column name to apply the filter to (e.g., "level2").
+#' @param read_fn Function. The function to use for reading the files. Defaults to \code{read.csv}.
 #'
-#' @param df Data frame. The raw data containing standardized columns (\code{level1}, \code{level2}, etc.).
-#' @param hierarchy_levels Character vector. The display names from the config file (e.g. \code{c("Country", "Province", "Department")}).
-#' @param selected_level Character string. The specific display name selected by the user (e.g. "Department").
-#'                       Must be present in \code{hierarchy_levels}.
-#' @param col_year Character string. Name of the year column in \code{df}. Defaults to "year".
-#' @param col_week Character string. Name of the week column in \code{df}. Defaults to "week".
-#' @param col_yearweek Character string. Name of the combined year-week column if separate 
-#'                     columns do not exist. Defaults to "week".
-#' @param col_cases Character string. Name of the case count column. Defaults to "n_cases".
+#' @return A data frame containing only the combined records for the requested target locations.
 #'
-#' @return A tibble with the following columns:
-#' \item{analysis_unit_id}{Unique ID created by pipe-separating the generic levels (e.g. "Argentina|Buenos Aires|La Plata").}
-#' \item{n_cases}{Aggregated counts.}
-#' \item{epi_date}{Approximate date for plotting.}
-#' \item{time_index}{Sequential integer index.}
-#' \item{...}{The generic geographic columns used for grouping (country, level1, etc.).}
+#' @importFrom purrr map_dfr
+#' @importFrom dplyr filter
+#' @export
+combine_and_filter_data <- function(file_paths, 
+                                    target_locations = NULL, 
+                                    geo_col = NULL,
+                                    read_fn = read.csv) {
+  
+  # 1. Read and bind all uploaded files
+  raw_df <- purrr::map_dfr(file_paths, read_fn)
+  
+  # 2. Standardize column names
+  names(raw_df) <- tolower(names(raw_df))
+  
+  # 3. Apply memory-saving filter (if locations and a target column are provided)
+  if (!is.null(target_locations) && !is.null(geo_col) && length(target_locations) > 0) {
+    # Ensure the column exists before filtering to avoid errors
+    if (geo_col %in% names(raw_df)) {
+      raw_df <- raw_df %>%
+        dplyr::filter(.data[[geo_col]] %in% target_locations)
+    } else {
+      warning(paste("Filter column", geo_col, "not found in uploaded data."))
+    }
+  }
+  
+  return(raw_df)
+}
+
+
+#' @title Prepare Weekly Data for Geographic Analysis
 #'
-#' @import dplyr
-#' @import tidyr
+#' @description
+#' Standardizes raw data into a weekly time series format for CUSUM analysis.
+#' This function is geographically agnostic; it maps the user's selection depth
+#' to standardized "level" columns (level1, level2, etc.), aggregates cases, 
+#' and fills temporal gaps with 0 to ensure continuity.
+#'
+#' @param df A data frame containing raw data with standardized headers (level1, level2, etc.).
+#' @param hierarchy_levels Character vector. The display names from config.json (e.g., c("Country", "Province")).
+#' @param selected_level Character string. The specific level name selected in the UI.
+#' @param col_country Character. Name of the country column. Default "country".
+#' @param col_year Character. Name of the year column in the CSV. Default "year".
+#' @param col_week Character. Name of the week column in the CSV. Default "week".
+#' @param col_cases Character. Name of the case count column. Default "n_cases".
+#'
+#' @return A tibble with analysis_unit_id, n_cases, epi_date, and time_index.
+#'
+#' @importFrom dplyr group_by across all_of summarise mutate select arrange ungroup row_number filter rename
+#' @importFrom tidyr complete unite
 #' @importFrom ISOweek ISOweek2date
 #' @export
 prepare_weekly_data_geo <- function(df,
                                     hierarchy_levels,
                                     selected_level,
-                                    col_year       = "year",
-                                    col_week       = "week",
-                                    col_yearweek   = "week",
-                                    col_cases      = "n_cases") {
+                                    col_country = "country",
+                                    col_year    = "year",
+                                    col_week    = "week",
+                                    col_cases   = "n_cases") {
   
-  
-  # ------------------------------------------------------------------
-  # 0. NORMALIZE COLUMN NAMES
-  # ------------------------------------------------------------------
-  # Convert all column names to lowercase to handle "Level1", "LEVEL1", "Year", etc.
+  # 1. Normalize column names to lowercase
   names(df) <- tolower(names(df))
   
-  # ------------------------------------------------------------------
-  # 1. Define the Standardized Map
-  # ------------------------------------------------------------------
-  # Indices correspond to your Config levels. 
-  # Index 1 is always Country. 
-  # Index 2 is Level 1, Index 3 is Level 2, etc.
+  # 2. Determine Required Generic Columns
+  # The function maps the depth of the selection to these standardized headers
+  # If more levels are needed simply add to the list following this format
   generic_map <- c("country", "level1", "level2", "level3", "level4")
   
-  # Validation: Check if selected level exists in the hierarchy
-  if (!selected_level %in% hierarchy_levels) {
-    stop(paste("Error: Selected level '", selected_level, 
-               "' is not found in the provided hierarchy configuration."))
-  }
-  
-  # ------------------------------------------------------------------
-  # 2. Determine Required Generic Columns
-  # ------------------------------------------------------------------
-  # Find the depth of the selected level (e.g., "Department" might be index 3)
+  # Find the depth index from the configuration vector
   level_depth <- which(hierarchy_levels == selected_level)
   
-  # Ensure we don't exceed the map (max 4 levels + country)
-  if (level_depth > length(generic_map)) {
-    stop(paste("Error: The requested hierarchy depth (", level_depth, 
-               ") exceeds the supported maximum (Country + 4 levels)."))
+  if (length(level_depth) == 0) {
+    stop("The selected level does not match any entry in the hierarchy configuration.")
   }
   
-  # Select the generic columns required for this depth
-  # e.g., if depth is 3, we need: "country", "level1", "level2"
+  # Identify only the columns needed for the current analysis depth
   required_cols <- generic_map[1:level_depth]
   
-  # ------------------------------------------------------------------
-  # 3. Check CSV for these Generic Columns
-  # ------------------------------------------------------------------
-  missing_cols <- setdiff(required_cols, names(df))
-  if (length(missing_cols) > 0) {
-    stop(paste("Error: The uploaded CSV is missing the standardized columns required for this level:", 
-               paste(missing_cols, collapse = ", "), 
-               ". Please ensure your CSV uses headers 'country', 'level1', 'level2', etc."))
-  }
-  
-  # ------------------------------------------------------------------
-  # 4. Handle Time Variables
-  # ------------------------------------------------------------------
-  has_year_week <- (col_year %in% names(df)) && (col_week %in% names(df))
-  
-  if (has_year_week) {
-    # Case A: Explicit Year and Week columns exist
-    df <- df %>%
-      dplyr::rename(
-        year = !!col_year,
-        week = !!col_week
-      )
-  } else if (col_yearweek %in% names(df)) {
-    # Case B: Combined string (e.g. "2024-W01")
-    df <- df %>%
-      dplyr::rename(yearweek = !!col_yearweek) %>%
-      tidyr::separate(
-        yearweek,
-        into    = c("year", "week"),
-        sep     = "[-_/W]",  
-        remove  = TRUE,
-        convert = TRUE
-      )
-  } else {
-    stop("Error: Could not find time columns. Need either (year & week) or a combined year-week column.")
-  }
-  
-  # ------------------------------------------------------------------
-  # 5. Aggregate Data using GENERIC columns
-  # ------------------------------------------------------------------
-  # We group by the dynamic required_cols + year + week
+  # 3. Aggregate Existing Data
   df_agg <- df %>%
-    dplyr::group_by(dplyr::across(dplyr::all_of(c(required_cols, "year", "week")))) %>%
+    dplyr::group_by(dplyr::across(dplyr::all_of(c(required_cols, col_year, col_week)))) %>%
     dplyr::summarise(
       n_cases = sum(.data[[col_cases]], na.rm = TRUE),
       .groups = "drop"
-    )
+    ) %>%
+    dplyr::rename(year = !!col_year, week = !!col_week)
   
-  # ------------------------------------------------------------------
-  # 6. Create Analysis Unit ID
-  # ------------------------------------------------------------------
-  # Concatenate the geo levels with "|" to create a unique ID
+  # 4. Gap Filling
+  # Ensures a continuous sequence of weeks (1-52) exists for every analysis unit
   df_agg <- df_agg %>%
-    tidyr::unite(
-      "analysis_unit_id",
-      dplyr::all_of(required_cols),
-      sep = "|",
-      remove = FALSE
-    )
+    dplyr::group_by(dplyr::across(dplyr::all_of(required_cols))) %>%
+    tidyr::complete(
+      year = min(year):max(year),
+      week = 1:52,
+      fill = list(n_cases = 0)
+    ) %>%
+    # Remove future weeks in the final year that haven't occurred yet
+    dplyr::filter(!(year == max(year) & week > max(df[[col_week]][df[[col_year]] == max(year)]))) %>%
+    dplyr::ungroup()
   
-  # ------------------------------------------------------------------
-  # 7. Add Date and Time Index
-  # ------------------------------------------------------------------
+  # 5. Create Analysis Unit ID and Time Index
+  # Merges the geographic levels into a single ID and calculates a 1..N index
   df_agg <- df_agg %>%
+    tidyr::unite("analysis_unit_id", dplyr::all_of(required_cols), sep = "|", remove = FALSE) %>%
     dplyr::mutate(
       iso_string = sprintf("%04d-W%02d-1", year, week),
       epi_date   = ISOweek::ISOweek2date(iso_string)
     ) %>%
     dplyr::select(-iso_string) %>%
-    # Sort and Index
     dplyr::arrange(analysis_unit_id, year, week) %>%
     dplyr::group_by(analysis_unit_id) %>%
     dplyr::mutate(time_index = dplyr::row_number()) %>%
     dplyr::ungroup()
   
   return(df_agg)
+}
+
+
+
+
+
+#' @title Process, Deduplicate, and Fill Target Data
+#'
+#' @description
+#' Filters the raw combined dataset to the user's requested locations and applies 
+#' two critical safety checks: a null/empty check to prevent crashes during UI 
+#' transitions, and a year range filter (2000-2100) to prevent 'Long Vector' 
+#' memory errors caused by date typos. It then resolves overlapping weeks 
+#' based on user preference and fills gaps via `prepare_weekly_data_geo`.
+#'
+#' @param raw_df Data frame. The combined raw data containing a 'file_index' column.
+#' @param target_locations Character vector. The specific locations to keep.
+#' @param target_col Character string. The column to filter locations on (e.g., "level2").
+#' @param req_cols Character vector. The generic geographic columns required for grouping.
+#' @param overlap_method Character string. How to resolve overlaps: "new", "old", or "sum".
+#' @param hierarchy_levels Character vector. The display names from config.json.
+#' @param selected_level Character string. The specific level name selected in the UI.
+#'
+#' @return A deduplicated, gap-filled tibble ready for CUSUM analysis, or NULL if input is invalid.
+#'
+#' @importFrom dplyr filter arrange group_by across all_of slice ungroup n summarise
+#' @export
+process_target_data <- function(raw_df, 
+                                target_locations, 
+                                target_col, 
+                                req_cols, 
+                                overlap_method, 
+                                hierarchy_levels, 
+                                selected_level) {
+  
+  # --- 1. Guard Clause: Stop if inputs are missing or empty ---
+  # This prevents crashes when switching levels in the UI
+  if (is.null(raw_df) || nrow(raw_df) == 0 || length(target_locations) == 0 || identical(target_locations, "")) {
+    return(NULL)
+  }
+  
+  # --- 2. Sanity Filter: Prevent 'Vector too long' error ---
+  # Typo years like 20241012 would cause the gap-filler to crash R
+  df_filtered <- raw_df %>%
+    dplyr::filter(as.character(.data[[target_col]]) %in% as.character(target_locations)) %>%
+    dplyr::filter(year >= 2000 & year <= 2100) 
+  
+  # Double-check we still have data after filtering
+  if (nrow(df_filtered) == 0) return(NULL)
+  
+  # --- 3. Overlap Resolution (Deduplication) ---
+  if (overlap_method == "old") {
+    df_dedup <- df_filtered %>%
+      dplyr::arrange(file_index) %>% 
+      dplyr::group_by(dplyr::across(dplyr::all_of(c(req_cols, "year", "week")))) %>%
+      dplyr::slice(1) %>%             
+      dplyr::ungroup()
+  } else if (overlap_method == "new") {
+    df_dedup <- df_filtered %>%
+      dplyr::arrange(file_index) %>% 
+      dplyr::group_by(dplyr::across(dplyr::all_of(c(req_cols, "year", "week")))) %>%
+      dplyr::slice(dplyr::n()) %>%   
+      dplyr::ungroup()
+  } else {
+    # Default to "sum" if not old or new
+    df_dedup <- df_filtered %>%
+      dplyr::group_by(dplyr::across(dplyr::all_of(c(req_cols, "year", "week")))) %>%
+      dplyr::summarise(n_cases = sum(n_cases, na.rm = TRUE), .groups = "drop")
+  }
+  
+  # --- 4. Gap Filling --- 
+  # Now safe to run because year range is guaranteed
+  filled_df <- prepare_weekly_data_geo(
+    df               = df_dedup, 
+    hierarchy_levels = hierarchy_levels,
+    selected_level   = selected_level
+  )
+  
+  return(filled_df)
 }
 
 
