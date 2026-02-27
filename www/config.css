@@ -12,9 +12,20 @@
 
 /* --- 2. GLOBAL PAGE STYLES --- */
 body { 
-  background-color: #f0f0f0; 
-  color: #616161; 
+/*  max-width: 1200px; /* Limits the overall app width */
+  margin: 0 auto;    /* Centers the app horizontally */
+  background-color: #f0f0f0; /* Keeping your original light gray background */
+  color: #616161;    /* Keeping your original text color */
 }
+
+/* Style the main Shiny container to look like a distinct app window */
+.container-fluid {
+  background-color: #ffffff; /* Gives the app a white background */
+  min-height: 100vh;         /* Ensures it stretches to the bottom of the screen */
+  padding: 20px;             /* Adds some breathing room inside */
+  box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1); /* Optional: adds a subtle shadow */
+}
+
 
 /* --- 3. TOP NAVIGATION BAR --- */
 .custom-navbar { 

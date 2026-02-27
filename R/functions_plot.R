@@ -14,6 +14,8 @@
 #' @param df The data frame used in the plot, containing 'week', 'year', and 'time_index'.
 #'
 #' @return A character vector of labels with vertical stacking for years.
+#' @keywords internal
+#' @noRd
 smart_labs <- function(breaks, df) {
   sapply(breaks, function(b) {
     # Find the row corresponding to this time_index
@@ -43,26 +45,31 @@ smart_labs <- function(breaks, df) {
 #'
 #' @description
 #' Ensures that the X-axis always has a tick mark at the exact start of a new 
-#' year, while maintaining a standard 5-week interval for the rest of the plot.
+#' year and at the very last available data point, while maintaining a standard 
+#' 5-week interval for the rest of the timeline.
 #'
-#' @param df Data frame containing the 'year' and 'time_index' columns.
-#' @param x_var Character string. The column name for the X-axis.
+#' @param df Data frame containing the 'year' and the time index columns.
+#' @param x_var Character string. The column name for the continuous X-axis. 
+#'        Defaults to "time_index".
 #'
-#' @return A sorted numeric vector of unique breaks.
+#' @return A sorted numeric vector of unique breaks to be used by \code{scale_x_continuous}.
+#' 
+#' @keywords internal
+#' @noRd
 get_smart_breaks <- function(df, x_var = "time_index") {
-  # Force breaks at the first available time_index of every year
   year_starts <- df %>% 
     dplyr::group_by(year) %>% 
     dplyr::filter(time_index == min(time_index)) %>% 
     dplyr::pull(time_index)
   
-  # Create a standard sequence of 5-week steps
+  max_val <- max(df[[x_var]], na.rm = TRUE)
+
   std_steps <- seq(min(df[[x_var]], na.rm = TRUE), 
-                   max(df[[x_var]], na.rm = TRUE), by = 5)
-  
-  # Combine and sort to ensure no overlap
-  return(sort(unique(c(year_starts, std_steps))))
+                   max_val, by = 5)
+
+  return(sort(unique(c(year_starts, std_steps, max_val))))
 }
+
 
 #' @title Plot Observed vs Expected Counts for a Single Unit
 #'
@@ -115,13 +122,16 @@ plot_cusum_series_unit <- function(df_unit,
 #'
 #' @description
 #' Visualizes the CUSUM statistic over time. Includes a red dashed 
-#' threshold line and smart X-axis labels with vertical year stacking.
+#' threshold line, red dots for ALL alarms, and smart X-axis labels.
 #'
 #' @param df_unit Data frame containing data for a single analysis unit.
-#' @param unit_label Character (optional). The analysis_unit_id (cleans pipes automatically).
+#' @param unit_label Character (optional). The analysis_unit_id.
 #' @param x_var Character string. Name of the time column. Defaults to "time_index".
 #' @param cusum_var Character string. Column name for the CUSUM statistic. Defaults to "cusum".
+#' @param alarm_var Character string. Column name for the logical alarm flag. Defaults to "alarm".
 #' @param h Numeric. The value of the decision threshold. Defaults to 2.26.
+#' @param k Numeric. The reference value. Defaults to 1.04.
+#' @param arl0 Numeric. The ARL0 value. Defaults to 370.
 #'
 #' @return A \code{ggplot2} object with a \code{theme_minimal} and base size of 18.
 #' @export
@@ -129,23 +139,47 @@ plot_cusum_process_unit <- function(df_unit,
                                     unit_label = NULL,
                                     x_var      = "time_index",
                                     cusum_var  = "cusum",
-                                    h          = 2.26) {
+                                    alarm_var  = "alarm",
+                                    h          = 2.26,
+                                    k          = 1.04,
+                                    arl0       = 370) {
   
+  # Clean the title (e.g., remove "Argentina|")
   clean_title <- if (!is.null(unit_label)) sub(".*\\|", "", unit_label) else "CUSUM Process"
+  
   x_sym     <- rlang::sym(x_var)
   cusum_sym <- rlang::sym(cusum_var)
   
+  # Calculate smart x-axis breaks
   my_breaks <- get_smart_breaks(df_unit, x_var)
   
+  # Filter data to get ONLY the rows where an alarm occurred
+  alarms_only <- df_unit[df_unit[[alarm_var]] == TRUE, ]
+  
+  # Format the subtitle to display parameters
+  param_subtitle <- sprintf("ARL0= %.2f   h= %.3f   k= %.3f", arl0, h, k)
+  
   ggplot(df_unit, aes(x = !!x_sym, y = !!cusum_sym)) +
-    geom_line(linewidth = 1, color = "darkblue") +
+    # 1. The main blue line (CUSUM Score)
+    geom_line(linewidth = 1, color = "#1b4a78") +
+    
+    # 2. The dashed red threshold line
     geom_hline(yintercept = h, linetype = "dashed", color = "red", linewidth = 1) +
+    
+    # 3. Red dots for ALL alarms (Real-World Standard)
+    geom_point(data = alarms_only, aes(y = !!cusum_sym), size = 4, color = "red") +
+    
     scale_x_continuous(breaks = my_breaks, labels = function(b) smart_labs(b, df_unit)) +
-    labs(x = "Timeline\n(Week / Year)", y = "CUSUM Score (S_n)", title = paste("CUSUM - Unit:", clean_title)) +
+    labs(x = "Timeline\n(Week / Year)", 
+         y = "CUSUM Score (S_n)", 
+         title = "Standardized Residual CUSUM (reset at alarms)",
+         subtitle = param_subtitle) +
     theme_minimal(base_size = 18) +
     theme(plot.title = element_text(face = "bold"),
+          plot.subtitle = element_text(size = 14, color = "gray20"),
           panel.grid.minor = element_blank())
 }
+
 
 #' @title CUSUM Alarms Overview (Heatmap)
 #'

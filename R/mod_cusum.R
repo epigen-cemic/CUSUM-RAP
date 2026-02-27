@@ -21,7 +21,7 @@ cusumUI <- function(id) {
   
   fluidPage(
     shinyjs::useShinyjs(),
-
+    
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "config.css")
     ),     # Link to the external CSS file located in the www folder
@@ -64,9 +64,47 @@ cusumUI <- function(id) {
                  tags$label(class = "control-label", "Variables"),
                  br(),
                  
-                 div(class = "variable-label", span("ARL 0 :"), numericInput(ns("param_arl0"), label = NULL, value = NA)),
-                 div(class = "variable-label", span("k :"), numericInput(ns("param_k"), label = NULL, value = NA, step = 0.001)),
-                 div(class = "variable-label", span("h :"), numericInput(ns("param_h"), label = NULL, value = NA, step = 0.001)),
+                 br(),
+                 br(),
+                 tags$label(class = "control-label", "Baseline Configuration"),
+                 numericInput(ns("param_weeks"), "Detection Period (Weeks):", 
+                              value = 52, min = 52, max = 104),
+                 
+                 br(),
+                 tags$label(class = "control-label", "Expected Value (\u03BC0)"),
+                 # 2. Toggle for Automatic vs Manual
+                 radioButtons(ns("mu_method"), label = NULL, 
+                              choices = c("Automatic (Poisson GLM)" = "auto", 
+                                          "Manual Input" = "manual")),
+                 
+                 # 3. Conditional panel that only shows if 'manual' is selected
+                 conditionalPanel(
+                   condition = paste0("input['", ns("mu_method"), "'] == 'manual'"),
+                   numericInput(ns("param_mu"), "Enter \u03BC0:", value = 10)
+                 ),
+                 
+                 br(),
+                 tags$label(class = "control-label", "CUSUM Parameters"),
+                 
+                 # 1. ARL0
+                 div(class = "variable-label", tags$label(class = "control-label", "Target ARL0 :"), 
+                     numericInput(ns("param_arl0"), label = NULL, value = NULL)),
+                 
+                 div(style = "min-height: 25px;"),
+                 
+                 # 2. k 
+                 div(class = "variable-label", tags$label(class = "control-label", "k (Sensitivity):"), 
+                     numericInput(ns("param_k"), label = NULL, value = NULL, step = 0.001)),
+                 
+                 div(style = "min-height: 25px;", uiOutput(ns("rec_text_k"))), 
+                 
+                 # 3. h 
+                 div(class = "variable-label", tags$label(class = "control-label", "h (Threshold):"), 
+                     numericInput(ns("param_h"), label = NULL, value = NULL, step = 0.001)),
+                 
+                 div(style = "min-height: 25px;", uiOutput(ns("rec_text_h"))),
+                 
+                 br(),
                  
                  br(),
                  actionButton(ns("run_analysis"), "Run Analysis", class = "btn-default", style = "width: 100%; color: black;")
@@ -96,7 +134,7 @@ cusumUI <- function(id) {
                    # Tab for the final CUSUM results
                    tabPanel("Analysis Results", 
                             br(),
-                            tableOutput(ns("table_preview")), 
+                            DT::DTOutput(ns("table_preview")),
                             br(),
                             # The download button starts disabled
                             shinyjs::disabled(
@@ -295,6 +333,34 @@ cusumServer <- function(id) {
       )
     })
     
+    # ---------------------------------------------------------
+    # 4.5 SMART PARAMETER RECOMMENDATIONS
+    # ---------------------------------------------------------
+    
+    # Render recommended 'h'
+    output$rec_text_h <- renderUI({
+      req(input$param_arl0, input$param_k)
+      rec_val <- recommend_h(input$param_arl0, input$param_k)
+      
+      if (!is.na(rec_val)) {
+        # CHANGED COLOR HERE vvv
+        tags$small(style = "color: #f9ff42; font-style: italic; display: block; text-align: right; margin-top: -10px; margin-bottom: 10px;", 
+                   paste("Recommended h:", rec_val))
+      }
+    })
+    
+    # Render recommended 'k'
+    output$rec_text_k <- renderUI({
+      req(input$param_arl0, input$param_h)
+      rec_val <- recommend_k(input$param_arl0, input$param_h)
+      
+      if (!is.na(rec_val)) {
+        # CHANGED COLOR HERE vvv
+        tags$small(style = "color: #f9ff42; font-style: italic; display: block; text-align: right; margin-top: -10px; margin-bottom: 10px;", 
+                   paste("Recommended k:", rec_val))
+      }
+    })
+    
     active_dataset <- reactive({
       if (isTruthy(input$file_load_temp)) {
         df <- read.csv(input$file_load_temp$datapath)
@@ -309,20 +375,44 @@ cusumServer <- function(id) {
     # 5. CUSUM MATH ENGINE
     # ---------------------------------------------------------
     analyzed_data <- eventReactive(input$run_analysis, {
-      req(active_dataset(), input$param_h, input$param_k, input$param_arl0)
+      req(active_dataset(), input$param_h, input$param_k, input$param_weeks)
+      
+      if (input$mu_method == "manual") {
+        req(input$param_mu)
+      }
       
       prepared_df <- active_dataset() 
-      max_week_index <- max(prepared_df$time_index, na.rm = TRUE)
-      cutoff_week <- max(0, max_week_index - 100)
       
+      # Safety Check: Stop immediately if the dataset is empty
+      if (nrow(prepared_df) == 0) return(NULL)
+      
+      max_week_index <- max(prepared_df$time_index, na.rm = TRUE)
+      
+      # Force the user input into a clean numeric value
+      window_size <- as.numeric(input$param_weeks)
+      
+      # 2. VALIDATION
+      if (max_week_index < window_size) {
+        error_msg <- sprintf("Error: You requested a total analysis period of %d weeks, but your file only contains %d weeks.", 
+                             window_size, max_week_index)
+        validate(error_msg)
+      }
+      
+      # 3. Determine the Start Week
+      start_week <- max(0, max_week_index - window_size)
+      
+      selected_mu <- if (input$mu_method == "manual") input$param_mu else NULL
+      
+      # 4. Run the CUSUM
       run_cusum_all_units(
         df              = prepared_df,
         unit_var        = "analysis_unit_id",
-        baseline_filter = function(d) d$time_index <= cutoff_week, 
-        detect_filter   = function(d) d$time_index > cutoff_week,
+        baseline_filter = function(d) d$time_index > start_week,
+        detect_filter   = function(d) d$time_index > start_week,
         k               = input$param_k,
         h               = input$param_h,
-        fixed_mu        = input$param_arl0 
+        fixed_mu        = selected_mu,
+        reset           = TRUE
       )
     })
     
@@ -347,7 +437,6 @@ cusumServer <- function(id) {
       df_unit <- analyzed_data() %>% 
         dplyr::filter(analysis_unit_id == input$unit_selector)
       
-      # Calling the function defined in functions_plot.R
       plot_cusum_series_unit(df_unit, unit_label = input$unit_selector)
     })
     
@@ -356,8 +445,11 @@ cusumServer <- function(id) {
       df_unit <- analyzed_data() %>% 
         dplyr::filter(analysis_unit_id == input$unit_selector)
       
-      # Calling the function defined in functions_plot.R
-      plot_cusum_process_unit(df_unit, unit_label = input$unit_selector, h = input$param_h)
+      plot_cusum_process_unit(df_unit, 
+                              unit_label = input$unit_selector, 
+                              h = input$param_h,
+                              k = input$param_k,
+                              arl0 = input$param_arl0)
     })
     
     # ---------------------------------------------------------
@@ -408,6 +500,40 @@ cusumServer <- function(id) {
       }
     )
     
-    output$table_preview <- renderTable({ req(analyzed_data()); analyzed_data() })
+    output$table_preview <- DT::renderDT({
+      req(analyzed_data())
+      
+      df <- analyzed_data()
+      
+      if ("epi_date" %in% names(df)) {
+        df$epi_date <- format(as.Date(df$epi_date), "%Y-W%V")
+      }
+      
+      DT::datatable(
+        df,
+        options = list(
+          pageLength = 25, 
+          scrollX = TRUE,
+          columnDefs = list(list(className = 'dt-left', targets = "_all")),
+          order = list(list(1, 'desc'))
+        ),
+        rownames = FALSE
+      )
+    })
+    
+    output$download_data <- downloadHandler(
+      filename = function() {
+        paste0("CUSUM_Results_", Sys.Date(), ".csv")
+      },
+      content = function(file) {
+        df <- analyzed_data()
+        
+        if ("epi_date" %in% names(df)) {
+          df$epi_date <- format(as.Date(df$epi_date), "%Y-W%V")
+        }
+        
+        write.csv(df, file, row.names = FALSE)
+      }
+    )
   })
 }

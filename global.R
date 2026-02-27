@@ -1,16 +1,28 @@
-library(lubridate)
+# Core Shiny & Web
 library(jsonlite)
+library(shinyjs)
+library(shiny)
+library(DT)   
+
+
+# Data Manipulation
+library(lubridate)
 library(ISOweek)
-library(ggplot2)
-library(tidyr)
 library(dplyr)
+library(tidyr)
+library(purrr)
 library(rlang)
 library(readr)
-library(shiny)
 
 
+# Visualization
+library(ggplot2)
+
+# Utilities
+library(here) 
 
 
+source("R/functions_parameters.R")
 source("R/functions_cusum.R")
 source("R/functions_plot.R")
 source("R/functions_io.R")
@@ -23,7 +35,6 @@ config_path <- here::here("www/config.json")
 config <- jsonlite::fromJSON(config_path)
 
 
-# Extract Argentina levels (currently fixed for argentina, can be dynamic in the future)
-# This gives you: c("country", "province", "department", "fraction")
+# Extract the desired levels from a country or a selection of countries
 geo_choices<- config$Argentina$levels
 names(geo_choices) <- tools::toTitleCase(geo_choices)

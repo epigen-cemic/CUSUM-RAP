@@ -45,6 +45,8 @@ cusum_core <- function(y, mu,
   alarm <- logical(n)
   z <- numeric(n)
   
+  current_S <- 0  # temporary tracker
+  
   for (t in seq_len(n)) {
     
     ## 1) Standardized residual
@@ -60,17 +62,14 @@ cusum_core <- function(y, mu,
     incr <- z[t] - k
     
     ## 3) One-sided CUSUM
-    if (t == 1) {
-      S[t] <- max(0, incr)
-    } else {
-      S[t] <- max(0, S[t - 1] + incr)
-    }
+    current_S <- max(0, current_S + incr)
+    S[t] <- current_S
     
-    ## 4) Alarm rule
-    if (S[t] >= h) {
+    ## 4) Alarm rule:
+    if (current_S >= h) {     # Check current_S instead of S[t]
       alarm[t] <- TRUE
       if (reset) {
-        S[t] <- 0
+        current_S <- 0        # Reset the tracker, leaving S[t] as the peak value!
       }
     }
   }
