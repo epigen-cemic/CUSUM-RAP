@@ -377,33 +377,27 @@ cusumServer <- function(id) {
     analyzed_data <- eventReactive(input$run_analysis, {
       req(active_dataset(), input$param_h, input$param_k, input$param_weeks)
       
-      if (input$mu_method == "manual") {
-        req(input$param_mu)
-      }
-      
       prepared_df <- active_dataset() 
-      
-      # Safety Check: Stop immediately if the dataset is empty
       if (nrow(prepared_df) == 0) return(NULL)
       
       max_week_index <- max(prepared_df$time_index, na.rm = TRUE)
-      
-      # Force the user input into a clean numeric value
       window_size <- as.numeric(input$param_weeks)
       
-      # 2. VALIDATION
       if (max_week_index < window_size) {
-        error_msg <- sprintf("Error: You requested a total analysis period of %d weeks, but your file only contains %d weeks.", 
-                             window_size, max_week_index)
-        validate(error_msg)
+        validate(sprintf("Error: You requested a total analysis period of %d weeks, but your file only contains %d weeks.", 
+                         window_size, max_week_index))
       }
       
-      # 3. Determine the Start Week
       start_week <- max(0, max_week_index - window_size)
       
-      selected_mu <- if (input$mu_method == "manual") input$param_mu else NULL
+      if (input$mu_method == "manual") {
+        req(input$param_mu)
+        final_mu <- input$param_mu
+      } else {
+        final_mu <- get_phase1_baseline(prepared_df, window_size)
+      }
       
-      # 4. Run the CUSUM
+      # Run CUSUM through the entire data with the result
       run_cusum_all_units(
         df              = prepared_df,
         unit_var        = "analysis_unit_id",
@@ -411,7 +405,7 @@ cusumServer <- function(id) {
         detect_filter   = function(d) d$time_index > start_week,
         k               = input$param_k,
         h               = input$param_h,
-        fixed_mu        = selected_mu,
+        fixed_mu        = final_mu,
         reset           = TRUE
       )
     })

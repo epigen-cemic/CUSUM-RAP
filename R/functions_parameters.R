@@ -81,3 +81,54 @@ recommend_k <- function(arl0, h) {
   
   return(round(res$root, 3))
 }
+
+
+
+#' @title Calculate Phase 1 Training Baseline
+#' 
+#' @description 
+#' Isolates the first 25% of the requested analysis window to establish a clean, 
+#' pre-outbreak expected baseline. This acts as a "Phase I" statistical control 
+#' period. It attempts a Poisson GLM first, but safely falls back to a 
+#' mathematical average if the data lacks sufficient variance.
+#'
+#' @param df Data frame. The dataset containing the timeline and case counts. 
+#'        Must include \code{time_index} and \code{n_cases} columns.
+#' @param window_size Numeric. The total number of weeks the user selected for 
+#'        the full analysis period.
+#'
+#' @return A single numeric value representing the safely calculated expected 
+#'         baseline count (\code{mu}).
+#'         
+#' @keywords internal
+#' @noRd
+get_phase1_baseline <- function(df, window_size) {
+  
+  # 1. Figure out the timeline
+  max_week <- max(df$time_index, na.rm = TRUE)
+  start_week <- max(0, max_week - window_size)
+  
+  # Calculate the 25% cutoff mark
+  baseline_cutoff <- start_week + (0.25 * window_size)
+  
+  # 2. Isolate Phase 1 (The first 25% of the data)
+  phase1_data <- df %>% 
+    dplyr::filter(time_index > start_week & time_index <= baseline_cutoff)
+  
+  # 3. Calculate the Expected Baseline safely
+  calculated_mu <- tryCatch({
+    # Attempt a basic Poisson GLM using the n_cases column
+    model <- glm(n_cases ~ 1, family = poisson(link = "log"), data = phase1_data)
+    exp(coef(model)[[1]]) 
+  }, error = function(e) {
+    # If the GLM panics (e.g., zero variance), fall back to the mathematical mean
+    mean(phase1_data$n_cases, na.rm = TRUE)
+  })
+  
+  # 4. Final Safety Net: If the result is still NA or NaN, use the whole dataset average
+  if (is.na(calculated_mu) || is.nan(calculated_mu)) {
+    calculated_mu <- mean(df$n_cases, na.rm = TRUE)
+  }
+  
+  return(calculated_mu)
+}
