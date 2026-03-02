@@ -55,23 +55,24 @@ cusumUI <- function(id) {
       column(3,
              div(class = "sidebar-dark",
                  tags$label(class = "control-label", "Geographic Level"),
-                 selectInput(ns("geo_level"), label = NULL, choices = NULL, selected = NULL),
+                 selectInput(ns("geo_level"), label = NULL, choices = NULL, selected = NULL, width = "100%"),
                  
                  # Dynamic dropdown for specific locations (hidden unless data is loaded)
                  uiOutput(ns("dynamic_target_ui")),
                  
-                 br(),
-                 tags$label(class = "control-label", "Variables"),
-                 br(),
                  
-                 br(),
                  br(),
                  tags$label(class = "control-label", "Baseline Configuration"),
                  numericInput(ns("param_weeks"), "Detection Period (Weeks):", 
-                              value = 52, min = 52, max = 104),
+                              value = 52, min = 52, max = 104, width = "100%"),
+                 
                  
                  br(),
-                 tags$label(class = "control-label", "Expected Value (\u03BC0)"),
+                 tags$label(class = "title-label", "Variables"),
+                 br(),
+                 
+                 
+                 tags$label(class = "control-label", "Expected Frequency (\u03BC0)"),
                  # 2. Toggle for Automatic vs Manual
                  radioButtons(ns("mu_method"), label = NULL, 
                               choices = c("Automatic (Poisson GLM)" = "auto", 
@@ -80,7 +81,11 @@ cusumUI <- function(id) {
                  # 3. Conditional panel that only shows if 'manual' is selected
                  conditionalPanel(
                    condition = paste0("input['", ns("mu_method"), "'] == 'manual'"),
-                   numericInput(ns("param_mu"), "Enter \u03BC0:", value = 10)
+                   tags$label(class = "control-label", "Enter Reference frequency (\u03BC0):"),
+                   tags$div(class = "input-overlay-wrapper",
+                            numericInput(ns("param_mu"), label = NULL, value = 10, width = "100%"),
+                            tags$span("per 100.000", class = "input-overlay-text")
+                   )
                  ),
                  
                  br(),
@@ -123,8 +128,8 @@ cusumUI <- function(id) {
                             fluidRow(
                               column(6, selectInput(ns("unit_selector"), "Select Location:", choices = NULL)),
                               column(6, div(class = "pull-right",
-                                            downloadButton(ns("download_series_plot"), "Download Detailed Plot", class = "btn-info"),
-                                            downloadButton(ns("download_process_plot"), "Download Process Plot", class = "btn-warning")
+                                            downloadButton(ns("download_series_plot"), "Download Bar Plot", class = "btn-info"),
+                                            downloadButton(ns("download_process_plot"), "Download Trends", class = "btn-warning")
                               ))
                             ),
                             plotOutput(ns("plot_series")),
@@ -289,7 +294,8 @@ cusumServer <- function(id) {
       req(raw_combined_data())
       selectizeInput(ns("target_locations"), "Specific Locations:",
                      choices = NULL, multiple = TRUE,
-                     options = list(placeholder = 'Select locations...'))
+                     options = list(placeholder = 'Select locations...'),
+                     width = "100%")
     })
     
     observeEvent(c(raw_combined_data(), input$geo_level), {
@@ -396,8 +402,7 @@ cusumServer <- function(id) {
       } else {
         final_mu <- get_phase1_baseline(prepared_df, window_size)
       }
-      
-      # Run CUSUM through the entire data with the result
+
       run_cusum_all_units(
         df              = prepared_df,
         unit_var        = "analysis_unit_id",
@@ -474,10 +479,9 @@ cusumServer <- function(id) {
     output$download_series_plot <- downloadHandler(
       filename = function() {
         clean_name <- sub(".*\\|", "", input$unit_selector)
-        paste0("CUSUM_Detailed_", clean_name, "_", Sys.Date(), ".png")
+        paste0("CUSUM_Bar_plot_", clean_name, "_", Sys.Date(), ".png")
       },
       content = function(file) {
-        # Grab the already-calculated reactive plot
         ggplot2::ggsave(file, plot = series_plot_obj(), 
                         device = "png", width = 16, height = 7, dpi = 300)
       }
@@ -486,7 +490,7 @@ cusumServer <- function(id) {
     output$download_process_plot <- downloadHandler(
       filename = function() {
         clean_name <- sub(".*\\|", "", input$unit_selector)
-        paste0("CUSUM_Process_", clean_name, "_", Sys.Date(), ".png")
+        paste0("CUSUM_Trends_", clean_name, "_", Sys.Date(), ".png")
       },
       content = function(file) {
         ggplot2::ggsave(file, plot = process_plot_obj(), 
@@ -500,7 +504,7 @@ cusumServer <- function(id) {
       df <- analyzed_data()
       
       if ("epi_date" %in% names(df)) {
-        df$epi_date <- format(as.Date(df$epi_date), "%Y-W%V")
+        df$epi_date <- format(as.Date(df$epi_date), "%G-W%V")
       }
       
       DT::datatable(
@@ -523,7 +527,7 @@ cusumServer <- function(id) {
         df <- analyzed_data()
         
         if ("epi_date" %in% names(df)) {
-          df$epi_date <- format(as.Date(df$epi_date), "%Y-W%V")
+          df$epi_date <- format(as.Date(df$epi_date), "%G-W%V")
         }
         
         write.csv(df, file, row.names = FALSE)
