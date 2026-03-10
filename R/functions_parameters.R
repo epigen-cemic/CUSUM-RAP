@@ -36,7 +36,7 @@ recommend_h <- function(arl0, k) {
   }
   
   # Search for h between 0.01 and 30
-  res <- try(uniroot(f, lower = 0.01, upper = 30), silent = TRUE)
+  res <- try(uniroot(f, lower = 0.001, upper = 30, extendInt = "yes"), silent = TRUE)
   if (inherits(res, "try-error")) return(NA)
   
   return(round(res$root, 3))
@@ -76,7 +76,7 @@ recommend_k <- function(arl0, h) {
   }
   
   # Search for k between 0.01 and 10
-  res <- try(uniroot(f, lower = 0.01, upper = 10), silent = TRUE)
+  res <- try(uniroot(f, lower = 0.001, upper = 10, extendInt = "yes"), silent = TRUE)
   if (inherits(res, "try-error")) return(NA)
   
   return(round(res$root, 3))
