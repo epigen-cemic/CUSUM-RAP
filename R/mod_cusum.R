@@ -97,11 +97,12 @@ cusumUI <- function(id) {
                  
                  div(style = "min-height: 25px;"),
                  
-                 # 2. k 
-                 div(class = "variable-label", tags$label(class = "control-label", "k (Sensitivity):"), 
-                     numericInput(ns("param_k"), label = NULL, value = NULL, step = 0.001)),
+                 # 2. RR (Relative Risk) - Replaces k
+                 div(class = "variable-label", tags$label(class = "control-label", "RR (Relative Risk):"), 
+                     numericInput(ns("param_rr"), label = NULL, value = NULL, step = 0.01)),
                  
-                 div(style = "min-height: 25px;", uiOutput(ns("rec_text_k"))), 
+                 # Shows calculated k based on RR and mu0
+                 div(style = "min-height: 25px;", uiOutput(ns("calc_k_text"))),
                  
                  # 3. h 
                  div(class = "variable-label", tags$label(class = "control-label", "h (Threshold):"), 
@@ -318,7 +319,6 @@ cusumServer <- function(id) {
     prepared_target_data <- reactive({
       req(raw_combined_data(), input$geo_level, input$target_locations, overlap_preference())
       
-      # Stop if location box is empty during transitions
       if (identical(input$target_locations, "") || length(input$target_locations) == 0) {
         return(NULL)
       }
@@ -327,7 +327,6 @@ cusumServer <- function(id) {
       generic_map <- c("country", "level1", "level2", "level3", "level4")
       level_depth <- which(h_levels == input$geo_level)
       
-      # Process data using safe year-range logic (2000-2100) from functions_io.R
       process_target_data(
         raw_df           = raw_combined_data(),
         target_locations = input$target_locations,
@@ -340,30 +339,42 @@ cusumServer <- function(id) {
     })
     
     # ---------------------------------------------------------
-    # 4.5 SMART PARAMETER RECOMMENDATIONS
+    # 4.5 SMART PARAMETER RECOMMENDATIONS & CALCULATIONS
     # ---------------------------------------------------------
     
-    # Render recommended 'h'
-    output$rec_text_h <- renderUI({
-      req(input$param_arl0, input$param_k)
-      rec_val <- recommend_h(input$param_arl0, input$param_k)
-      
-      if (!is.na(rec_val)) {
-        # CHANGED COLOR HERE vvv
-        tags$small(style = "color: #f9ff42; font-style: italic; display: block; text-align: right; margin-top: -10px; margin-bottom: 10px;", 
-                   paste("Recommended h:", rec_val))
+    # Helper to peek at what k will be if using manual inputs
+    current_k <- reactive({
+      req(input$param_rr)
+      if (input$mu_method == "manual") {
+        req(input$param_mu)
+        return(calculate_k_from_rr(input$param_rr, input$param_mu))
+      } else {
+        # If auto, we calculate during run_analysis
+        return(NULL)
       }
     })
     
-    # Render recommended 'k'
-    output$rec_text_k <- renderUI({
-      req(input$param_arl0, input$param_h)
-      rec_val <- recommend_k(input$param_arl0, input$param_h)
+    # Render calculated 'k' to UI
+    output$calc_k_text <- renderUI({
+      k_val <- current_k()
+      if (!is.null(k_val)) {
+        tags$small(style = "color: #f9ff42; font-style: italic; display: block; text-align: right; margin-top: -10px; margin-bottom: 10px;", 
+                   paste("Calculated k:", round(k_val, 3)))
+      } else {
+        tags$small(style = "color: #cccccc; font-style: italic; display: block; text-align: right; margin-top: -10px; margin-bottom: 10px;", 
+                   "k will be calculated automatically.")
+      }
+    })
+    
+    # Render recommended 'h'
+    output$rec_text_h <- renderUI({
+      # Needs a calculated k to give an accurate h recommendation
+      req(input$param_arl0, current_k())
+      rec_val <- recommend_h(input$param_arl0, current_k())
       
       if (!is.na(rec_val)) {
-        # CHANGED COLOR HERE vvv
         tags$small(style = "color: #f9ff42; font-style: italic; display: block; text-align: right; margin-top: -10px; margin-bottom: 10px;", 
-                   paste("Recommended k:", rec_val))
+                   paste("Recommended h:", rec_val))
       }
     })
     
@@ -381,7 +392,8 @@ cusumServer <- function(id) {
     # 5. CUSUM MATH ENGINE
     # ---------------------------------------------------------
     analyzed_data <- eventReactive(input$run_analysis, {
-      req(active_dataset(), input$param_h, input$param_k, input$param_weeks)
+      # Require the new param_rr instead of param_k
+      req(active_dataset(), input$param_h, input$param_rr, input$param_weeks)
       
       prepared_df <- active_dataset() 
       if (nrow(prepared_df) == 0) return(NULL)
@@ -402,20 +414,33 @@ cusumServer <- function(id) {
       } else {
         final_mu <- get_phase1_baseline(prepared_df, window_size)
       }
-
-      run_cusum_all_units(
+      
+      # Calculate k dynamically using the new function
+      calculated_k <- calculate_k_from_rr(input$param_rr, final_mu)
+      
+      res <- run_cusum_all_units(
         df              = prepared_df,
         unit_var        = "analysis_unit_id",
         baseline_filter = function(d) d$time_index > start_week,
         detect_filter   = function(d) d$time_index > start_week,
-        k               = input$param_k,
+        k               = calculated_k,
         h               = input$param_h,
         fixed_mu        = final_mu,
         reset           = TRUE
       )
+      
+      # Attach the specific calculated k safely so plotting functions can retrieve it
+      if (length(calculated_k) == 1) {
+        res$k_value <- calculated_k
+      } else if (is.vector(calculated_k) && !is.null(names(calculated_k))) {
+        res$k_value <- calculated_k[res$analysis_unit_id]
+      } else {
+        res$k_value <- calculated_k[1]
+      }
+      
+      return(res)
     })
     
-    # Update dropdown selector when analysis is complete
     observeEvent(analyzed_data(), {
       units <- unique(analyzed_data()$analysis_unit_id)
       updateSelectInput(session, "unit_selector", choices = units)
@@ -424,8 +449,6 @@ cusumServer <- function(id) {
     # ---------------------------------------------------------
     # 6. REACTIVE PLOT OBJECTS (The Logic Hub)
     # ---------------------------------------------------------
-    # These create the plot objects once, so both the UI and Download button see the same thing.
-    
     heatmap_obj <- reactive({
       req(analyzed_data())
       plot_cusum_alarms_overview(analyzed_data())
@@ -444,23 +467,23 @@ cusumServer <- function(id) {
       df_unit <- analyzed_data() %>% 
         dplyr::filter(analysis_unit_id == input$unit_selector)
       
+      # Extract the k-value that was specifically calculated for this unit
+      unit_k <- unique(df_unit$k_value)[1]
+      
       plot_cusum_process_unit(df_unit, 
                               unit_label = input$unit_selector, 
                               h = input$param_h,
-                              k = input$param_k,
+                              k = unit_k,
                               arl0 = input$param_arl0)
     })
     
     # ---------------------------------------------------------
     # 7. RENDERING & BUTTON CONTROL
     # ---------------------------------------------------------
-    
-    # IMPORTANT: Use parentheses () to "wake up" the reactive objects.
     output$plot_heatmap <- renderPlot({ heatmap_obj() })
     output$plot_series  <- renderPlot({ series_plot_obj() })
     output$plot_cusum_process <- renderPlot({ process_plot_obj() })
     
-    # Enable Download Buttons only when data is ready
     observe({
       if (isTruthy(analyzed_data())) {
         shinyjs::enable("download_data")

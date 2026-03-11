@@ -82,6 +82,39 @@ recommend_k <- function(arl0, h) {
   return(round(res$root, 3))
 }
 
+#' @title Calculate CUSUM Sensitivity Parameter (k)
+#'
+#' @description
+#' Calculates the CUSUM sensitivity parameter (\code{k}) based on the 
+#' Relative Risk (\code{RR}) and the expected baseline frequency (\code{mu0_mean}).
+#' 
+#' The function uses the formula:
+#' \code{delta = (RR - 1) * sqrt(mu0_mean)}
+#' \code{k = delta / 2}
+#'
+#' @param rr Numeric. The Relative Risk (RR) requested from the user.
+#' @param mu0_mean Numeric. The expected baseline frequency (\u03BC0).
+#'
+#' @return Numeric. The calculated sensitivity parameter \code{k}.
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' calculate_k_from_rr(rr = 1.5, mu0_mean = 4.0)
+#' }
+calculate_k_from_rr <- function(rr, mu0_mean) {
+  # Stop if mu0_mean is invalid for a square root
+  if (any(mu0_mean < 0, na.rm = TRUE)) {
+    stop("mu0_mean cannot be negative, as it is used in a square root.")
+  }
+  
+  delta <- (rr - 1) * sqrt(mu0_mean)
+  k <- delta / 2
+  
+  return(k)
+}
+
 
 
 #' @title Calculate Phase 1 Training Baseline
