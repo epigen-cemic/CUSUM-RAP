@@ -31,7 +31,7 @@ source("R/mod_cusum.R")
 
 
 
-config_path <- here::here("www/config.json")
+config_path <- here::here("config.json")
 config <- jsonlite::fromJSON(config_path)
 
 
