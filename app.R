@@ -4,7 +4,6 @@ source("global.R")
 #                     UI
 # ===========================================
 ui <- fluidPage(
-  titlePanel("CUSUM Rumor Analysis Dashboard"),
   
   # 3. Call the Module UI
   # We give it the ID "main_analysis". This string is crucial.
