@@ -2,10 +2,10 @@
 
 This repository contains the scripts for WS5.WP1.2 Product 1:
 a Reproducible Analytical Pipeline (RAP) implementing a CUSUM-based
-early detection algorithm on weekly rumor counts per spatial unit.
+early detection algorithm on weekly case counts per spatial unit.
 
 The RAP is designed to run **after**:
-1. Individual-level rumor data are collected with **Rumor Form**.
+1. Individual-level case data are collected with **Rapid Case Report**.
 2. Data are filtered and aggregated by week and spatial unit using **API-Pop**.
 3. The aggregated output (weekly counts) is saved as a CSV and used as input
    for this CUSUM RAP.
