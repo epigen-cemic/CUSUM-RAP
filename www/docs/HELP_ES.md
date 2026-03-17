@@ -1,6 +1,6 @@
 # Herramienta RAP CUSUM: Guía de Desarrollo y Administración
 
-Esta guía está dirigida a desarrolladores, administradores de TI y mantenedores de la Herramienta RAP CUSUM. Si sos un usuario final que busca instrucciones sobre cómo usar la interfaz, consultá el **Manual de Usuario** ubicado en `www/docs/Documentation.pdf` o hacé clic en el botón "Help" dentro de la aplicación.
+Esta guía está dirigida a desarrolladores, administradores de TI y mantenedores de la Herramienta RAP CUSUM. Si eres un usuario final que busca instrucciones sobre cómo utilizar la interfaz, puedes consultar el **Manual de Usuario** ubicado en `www/docs/Documentation.pdf` o haciendo clic en el botón "Help" dentro de la aplicación.
 
 ## 1. Estructura del Proyecto
 El repositorio está estructurado como una aplicación Shiny estándar con componentes modularizados.
@@ -35,24 +35,24 @@ El repositorio está estructurado como una aplicación Shiny estándar con compo
 
 ## 2. Ejecutar la App Localmente (Desarrollo)
 Para ejecutar o probar la aplicación en un entorno de desarrollo R:
-1. Abrí el archivo `CUSUM-RAP.Rproj` en RStudio.
-2. Abrí `app.R`.
-3. Hacé clic en **Run App** en RStudio, o ejecutá `shiny::runApp()` en la consola.
+1. Abrir el archivo `CUSUM-RAP.Rproj` en RStudio.
+2. Abrir `app.R`.
+3. Hacer clic en **Run App** en RStudio, o ejecutar `shiny::runApp()` en la consola.
 
 ## 3. Despliegue en la Web
-Para que la herramienta sea accesible a través de un navegador web, debés alojar la aplicación en un servidor.
+Para que la herramienta sea accesible a través de un navegador web, se debe alojar la aplicación en un servidor.
 
 **Opción A: shinyapps.io (Hosting en la nube más sencillo)**
-1. Creá una cuenta gratuita o paga en [shinyapps.io](https://www.shinyapps.io/).
-2. Instalá el paquete de despliegue en R ejecutando `install.packages("rsconnect")`.
-3. Autenticá tu sesión de RStudio usando el token seguro provisto en tu panel de shinyapps.io.
-4. Desplegá la app haciendo clic en el botón azul **Publish** en la esquina superior derecha de tu editor de RStudio, o ejecutando `rsconnect::deployApp()` en la consola.
+1. Puedes crear una cuenta gratuita o paga en [shinyapps.io](https://www.shinyapps.io/).
+2. Instalar el paquete de despliegue en R ejecutando `install.packages("rsconnect")`.
+3. Autenticar tu sesión de RStudio usando el token seguro provisto en tu panel de shinyapps.io.
+4. Desplegar la app haciendo clic en el botón azul **Publish** en la esquina superior derecha de tu editor de RStudio, o ejecutando `rsconnect::deployApp()` en la consola.
 
 **Opción B: Infraestructura Propia**
-Si tus datos epidemiológicos requieren un cumplimiento estricto de privacidad que impide el uso de hosting en la nube de terceros, podés alojar la aplicación en tu propia infraestructura (AWS, DigitalOcean o un servidor interno seguro). Esto requiere instalar **Shiny Server** (open-source) en una máquina Linux o empaquetar la aplicación utilizando contenedores **Docker**.
+Si tus datos epidemiológicos requieren un cumplimiento estricto de privacidad que impide el uso de hosting en la nube de terceros, puedes alojar la aplicación en tu propia infraestructura (AWS, DigitalOcean o un servidor interno seguro). Esto requiere instalar **Shiny Server** (open-source) en una máquina Linux o empaquetar la aplicación utilizando contenedores **Docker**.
 
 ## 4. Configuración y Personalización de la App
 Los administradores pueden personalizar la apariencia y el mapeo geográfico sin alterar la lógica central de R.
 
-* **Modificación del Diseño (`www/config.css`)**: El estilo de la aplicación está codificado en este archivo CSS. Buscá y reemplazá los códigos hexadecimales específicos para cambiar el aspecto visual (ej., `#4a4a4a` para fondos gris oscuro, `#616161` para texto estándar).
-* **Agregar Países y Regiones (`config.json`)**: La jerarquía espacial se define aquí. Añadí un nuevo arreglo definiendo los niveles administrativos de mayor a menor (ej., `"Brazil": { "levels": ["country", "state", "municipality"] }`).
+* **Modificación del Diseño (`www/config.css`)**: El estilo de la aplicación está codificado en este archivo CSS. Busca y reemplaza los códigos hexadecimales específicos para cambiar el aspecto visual (ej., `#4a4a4a` para fondos gris oscuro, `#616161` para texto estándar).
+* **Agregar Países y Regiones (`config.json`)**: La jerarquía espacial se define aquí. Añade un nuevo arreglo definiendo los niveles administrativos de mayor a menor (ej., `"Brazil": { "levels": ["country", "state", "municipality"] }`).
