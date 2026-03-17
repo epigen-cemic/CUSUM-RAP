@@ -9,28 +9,29 @@ El repositorio está estructurado como una aplicación Shiny estándar con compo
 * **Directorio `R/`**: Contiene la lógica central y los módulos Shiny. Esto incluye `mod_cusum.R` (el módulo principal de UI y Servidor) y los scripts del backend (`functions_cusum.R`, `functions_io.R`, `functions_parameters.R`, `functions_plot.R`).
 * **Directorio `www/`**: Contiene los recursos web estáticos expuestos al navegador. Esto incluye `config.css` (estilos de UI), la carpeta `docs/` (documentación para el usuario final) y recursos gráficos (`AnalysisforAction_white.png`, `splash.png`, `default.ico`).
 
+```text
 / (Directorio Raíz)
 ├── app.R                        # Script principal de la aplicación
-├── global.R                     # Script de configuración y carga de variables globales
+├── global.R                     # Script de configuración y variables globales
 ├── CUSUM-RAP.Rproj              # Archivo del proyecto de RStudio
-├── config.json                  # Configuraciones de nivel superior (ej. jerarquías espaciales)
+├── config.json                  # Configuraciones (ej. jerarquías espaciales)
 │
 ├── R/                           # Lógica central y módulos Shiny
 │   ├── mod_cusum.R              # Módulo principal (UI y Servidor)
 │   ├── functions_cusum.R        # Funciones matemáticas del algoritmo
-│   ├── functions_io.R           # Funciones de lectura y guardado de datos
+│   ├── functions_io.R           # Funciones de lectura y guardado
 │   ├── functions_parameters.R   # Funciones para el cálculo de variables
 │   └── functions_plot.R         # Funciones para generar los gráficos
 │
-└── www/                         # Recursos web estáticos (expuestos al navegador)
-    ├── config.css               # Hoja de estilos (colores y diseño de la UI)
+└── www/                         # Recursos web estáticos
+    ├── config.css               # Hoja de estilos (colores y diseño)
     ├── AnalysisforAction_white.png # Recurso gráfico
     ├── splash.png               # Recurso gráfico
-    ├── default.ico              # Ícono de la pestaña del navegador
+    ├── default.ico              # Ícono de la pestaña
     │
     └── docs/                    # Documentación para el usuario final
         └── Documentation.pdf    # El manual que se abre al tocar "Help"
-        
+```
 
 ## 2. Ejecutar la App Localmente (Desarrollo)
 Para ejecutar o probar la aplicación en un entorno de desarrollo R:
