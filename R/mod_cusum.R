@@ -35,7 +35,7 @@ cusumUI <- function(id) {
     # --- TIER 2: HERO SECTION (Title Only) ---
     div(class = "hero-section",
         div(class = "hero-content",
-            h1(class = "app-title", "CUSUM Analysis - WP1.02 v1.2")
+            h1(class = "app-title", "CUSUM Analysis")
         )
     ),
     # --- TIER 3: MENU BAR  ---
@@ -52,7 +52,7 @@ cusumUI <- function(id) {
                 )
             ),
             tags$a("Selection"),
-            tags$a("Help")
+            tags$a("Help", href = "docs/User Manual.pdf", target = "_blank")
         )
     ),
 
@@ -112,8 +112,8 @@ cusumUI <- function(id) {
                                     fluidRow(
                                       column(6, selectInput(ns("unit_selector"), "Select Location:", choices = NULL)),
                                       column(6, div(class = "pull-right",
-                                                    downloadButton(ns("download_series_plot"), "Download Bar Plot", class = "btn-info"),
-                                                    downloadButton(ns("download_process_plot"), "Download Trends", class = "btn-warning")
+                                                    shinyjs::disabled(downloadButton(ns("download_series_plot"), "Download Bar Plot", class = "btn-info")),
+                                                    shinyjs::disabled(downloadButton(ns("download_process_plot"), "Download Trends", class = "btn-warning"))
                                       ))
                                     ),
                                     plotOutput(ns("plot_series")),
