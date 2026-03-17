@@ -9,6 +9,7 @@ The repository is structured as a standard Shiny application with modularized co
 * **`R/` Directory**: Contains the core logic and Shiny modules. This includes `mod_cusum.R` (the main UI and Server module) and the backend scripts (`functions_cusum.R`, `functions_io.R`, `functions_parameters.R`, `functions_plot.R`).
 * **`www/` Directory**: Contains static web assets exposed to the browser. This includes `config.css` (UI styling), the `docs/` folder (end-user documentation), and graphical assets (`AnalysisforAction_white.png`, `splash.png`, `default.ico`).
 
+```text
 / (Root Directory)
 ├── app.R                        # Main application script
 ├── global.R                     # Configuration and global variables script
@@ -30,7 +31,7 @@ The repository is structured as a standard Shiny application with modularized co
     │
     └── docs/                    # End-user documentation
         └── Documentation.pdf    # The manual that opens when clicking "Help"
-        
+```
 
 ## 2. Running the App Locally (Development)
 To run or test the application within an R development environment:
