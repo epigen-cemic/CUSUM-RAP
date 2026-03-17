@@ -1,6 +1,6 @@
 # Herramienta RAP CUSUM: Guía de Desarrollo y Administración
 
-Esta guía está dirigida a desarrolladores, administradores de TI y mantenedores de la Herramienta RAP CUSUM. Si eres un usuario final que busca instrucciones sobre cómo utilizar la interfaz, puedes consultar el **Manual de Usuario** ubicado en `www/docs/Documentation.pdf` o haciendo clic en el botón "Help" dentro de la aplicación.
+Esta guía está dirigida a desarrolladores, administradores de IT y mantenedores de la Herramienta RAP CUSUM. Si eres un usuario final que busca instrucciones sobre cómo utilizar la interfaz, puedes consultar el **Manual de Usuario** ubicado en `www/docs/Documentation.pdf` o haciendo clic en el botón "Help" dentro de la aplicación.
 
 ## 1. Estructura del Proyecto
 El repositorio está estructurado como una aplicación Shiny estándar con componentes modularizados.
