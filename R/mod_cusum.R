@@ -44,15 +44,13 @@ cusumUI <- function(id) {
             div(class = "dropdown",
                 tags$a("Files", class = "dropbtn"), # Added a class for the button
                 div(class = "dropdown-content",
-                    actionLink(ns("menu_load"), "Load Prepared Data"),
-                    downloadLink(ns("menu_save"), "Save Prepared Data"),
                     tags$hr(style = "border-color: #444; margin: 0;"),
                     actionLink(ns("menu_upload"), "Upload RAW Data"),
                     actionLink(ns("menu_remove"), "Clear Memory")
                 )
             ),
             tags$a("Selection"),
-            tags$a("Help", href = "docs/User Manual.pdf", target = "_blank")
+            tags$a("Help", href = "docs/User_Manual.pdf", target = "_blank")
         )
     ),
 
@@ -128,14 +126,14 @@ cusumUI <- function(id) {
                                     )
                            ),
                            tabPanel("Prepared Data",
-                                    div(style = "background-color: #e9ecef; padding: 15px; border-left: 5px solid #4a4a4a; margin-bottom: 20px;",
-                                        tags$p(tags$strong("Pro Tip:"), "To save this formatted dataset for future use, go to the top menu: ", 
-                                               tags$span(style = "font-style: italic; color: #333;", "Files > Save Prepared Data"), "."),
-                                        tags$p(style = "font-size: 0.9em; margin-bottom: 0;", 
-                                               "This will export a .csv that includes all filled weeks and geographic levels.")
+                                    div(class = "prepared-panel",
+                                        tags$p(tags$strong("Prepared Dataset Preview")),
+                                        tags$p("This table shows the cleaned and aggregated dataset used for the CUSUM analysis."),
+                                        tags$p(class = "prepared-note",
+                                               "Data includes resolved overlaps, selected geographic level, and completed time series.")
                                     ),
                                     textOutput(ns("rows_added_info")),
-                                    DT::DTOutput(ns("table_prepared"))
+                                    uiOutput(ns("prepared_summary"))
                            )
                          )
                      )
@@ -196,27 +194,14 @@ cusumServer <- function(id) {
     })
     
     observeEvent(input$menu_remove, {
-      shinyjs::reset("file_upload") 
+      shinyjs::reset("file_upload")
+      overlap_preference(NULL)
+      
+      updateSelectInput(session, "unit_selector", choices = NULL)
+      
       showNotification("Data removed.", type = "message")
     })
-    
-    observeEvent(input$menu_load, {
-      showModal(modalDialog(
-        title = "Load Prepared Data",
-        p("Select a previously saved 'Prepared Data' file."),
-        fileInput(ns("file_load_temp"), "Select CSV File", accept = c(".csv")),
-        easyClose = TRUE
-      ))
-    })
-    
-    output$menu_save <- downloadHandler(
-      filename = function() { paste0("Prepared_Data_", Sys.Date(), ".csv") },
-      content = function(file) {
-        req(active_dataset()) 
-        write.csv(active_dataset(), file, row.names = FALSE)
-      }
-    )
-    
+
     # ---------------------------------------------------------
     # 2. RAW DATA PROCESSING & CONFLICT RESOLUTION
     # ---------------------------------------------------------
@@ -314,27 +299,21 @@ cusumServer <- function(id) {
     # ---------------------------------------------------------
     # 4.5 SMART PARAMETER RECOMMENDATIONS & CALCULATIONS
     # ---------------------------------------------------------
-    
-    # Helper to peek at what k will be
     current_k <- reactive({
       req(input$param_rr)
-      
-      # Determine which mu0 to use
+
       if (input$mu_method == "manual") {
         req(input$param_mu)
         mu_val <- input$param_mu
       } else {
         # Automatic method: needs a dataset to calculate baseline
-        req(active_dataset())
-        mu_val <- get_phase1_baseline(active_dataset(), as.numeric(input$param_weeks))
+        req(prepared_target_data())
+        mu_val <- get_phase1_baseline(prepared_target_data(), as.numeric(input$param_weeks))
       }
-      
-      # Calculate k based on the determined mu0
       k_val <- calculate_k_from_rr(input$param_rr, mu_val)
       return(k_val)
     })
     
-    # Render calculated 'k' to UI
     output$calc_k_text <- renderUI({
       k_val <- current_k()
       if (!is.null(k_val)) {
@@ -346,9 +325,7 @@ cusumServer <- function(id) {
       }
     })
     
-    # Render recommended 'h'
     output$rec_text_h <- renderUI({
-      # Needs ARL0 and a valid calculated k
       req(input$param_arl0, current_k())
       
       rec_val <- recommend_h(input$param_arl0, current_k())
@@ -359,40 +336,31 @@ cusumServer <- function(id) {
           paste("Recommended h:", rec_val)
         )
       } else {
-        # Fallback if uniroot fails or inputs are invalid
         tags$small(
           style = "color: #ff4242; font-style: italic; display: block; text-align: right; margin-top: -10px; margin-bottom: 10px;", 
           "Unable to calculate h recommendation."
         )
       }
     })
-    
-    active_dataset <- reactive({
-      if (isTruthy(input$file_load_temp)) {
-        df <- read.csv(input$file_load_temp$datapath)
-        names(df) <- tolower(names(df))
-        return(df)
-      } else {
-        return(prepared_target_data())
-      }
-    })
-    
+
     # ---------------------------------------------------------
     # 5. CUSUM MATH ENGINE
     # ---------------------------------------------------------
     analyzed_data <- eventReactive(input$run_analysis, {
-      # Require the new param_rr instead of param_k
-      req(active_dataset(), input$param_h, input$param_rr, input$param_weeks)
+      req(prepared_target_data(), input$param_h, input$param_rr, input$param_weeks)
       
-      prepared_df <- active_dataset() 
+      prepared_df <- prepared_target_data() 
       if (nrow(prepared_df) == 0) return(NULL)
       
       max_week_index <- max(prepared_df$time_index, na.rm = TRUE)
       window_size <- as.numeric(input$param_weeks)
       
       if (max_week_index < window_size) {
-        validate(sprintf("Error: You requested a total analysis period of %d weeks, but your file only contains %d weeks.", 
-                         window_size, max_week_index))
+        validate(need(max_week_index >= window_size,
+            sprintf("Error: You requested %d weeks, but only %d are available.",
+                    window_size, max_week_index)
+            )
+        )
       }
       
       start_week <- max(0, max_week_index - window_size)
@@ -404,7 +372,6 @@ cusumServer <- function(id) {
         final_mu <- get_phase1_baseline(prepared_df, window_size)
       }
       
-      # Calculate k dynamically using the new function
       calculated_k <- calculate_k_from_rr(input$param_rr, final_mu)
       
       res <- run_cusum_all_units(
@@ -418,7 +385,6 @@ cusumServer <- function(id) {
         reset           = TRUE
       )
       
-      # Attach the specific calculated k safely so plotting functions can retrieve it
       if (length(calculated_k) == 1) {
         res$k_value <- calculated_k
       } else if (is.vector(calculated_k) && !is.null(names(calculated_k))) {
@@ -456,7 +422,6 @@ cusumServer <- function(id) {
       df_unit <- analyzed_data() %>% 
         dplyr::filter(analysis_unit_id == input$unit_selector)
       
-      # Extract the k-value that was specifically calculated for this unit
       unit_k <- unique(df_unit$k_value)[1]
       
       plot_cusum_process_unit(df_unit, 
@@ -473,6 +438,22 @@ cusumServer <- function(id) {
     output$plot_series  <- renderPlot({ series_plot_obj() })
     output$plot_cusum_process <- renderPlot({ process_plot_obj() })
     
+    output$table_preview <- DT::renderDT({
+      req(analyzed_data())
+      
+      df <- analyzed_data()
+      
+      if ("epi_date" %in% names(df)) {
+        df$epi_date <- format(as.Date(df$epi_date), "%G-W%V")
+      }
+      
+      DT::datatable(df, options = list(
+          pageLength = 25, scrollX = TRUE,
+          columnDefs = list(list(className = 'dt-left', targets = "_all")),
+          order = list(list(1, 'desc'))),
+        rownames = FALSE)
+    })
+    
     observe({
       if (isTruthy(analyzed_data())) {
         shinyjs::enable("download_data")
@@ -483,6 +464,54 @@ cusumServer <- function(id) {
         shinyjs::disable("download_series_plot")
         shinyjs::disable("download_process_plot")
       }
+    })
+    
+    output$prepared_summary <- renderUI({
+      
+      df <- prepared_target_data()
+      
+      if (is.null(df)) {
+        return(
+          div(class = "prepared-panel",
+              tags$p("Upload data and select locations to preview dataset."))
+          )
+      }
+      
+      if (nrow(df) == 0) {
+        return(
+          div(class = "prepared-panel",
+              tags$p("No prepared data available."))
+        )
+      }
+      
+      weeks <- length(unique(df$time_index))
+      
+      h_levels <- hierarchy_levels_list()
+      generic_map <- c("country", "level1", "level2", "level3", "level4")
+      
+      available_levels <- generic_map[generic_map %in% names(df)]
+      level_names <- h_levels[seq_along(available_levels)]
+      
+      counts <- lapply(seq_along(available_levels), function(i) {
+        col <- available_levels[i]
+        n <- length(unique(df[[col]][!is.na(df[[col]]) & df[[col]] != ""]))
+        list(label = level_names[i], value = n)
+      })
+      
+      counts <- c(counts, list(list(label = "Weeks", value = weeks)))
+      
+      div(
+        class = "prepared-panel",
+        div(class = "summary-container",
+          lapply(counts, function(x) {
+            div(
+              class = "summary-card",
+              div(class = "summary-label", x$label),
+              div(class = "summary-value", x$value)
+            )
+          })
+        )
+      )
     })
     
     # ---------------------------------------------------------
@@ -509,27 +538,6 @@ cusumServer <- function(id) {
                         device = "png", width = 16, height = 7, dpi = 300)
       }
     )
-    
-    output$table_preview <- DT::renderDT({
-      req(analyzed_data())
-      
-      df <- analyzed_data()
-      
-      if ("epi_date" %in% names(df)) {
-        df$epi_date <- format(as.Date(df$epi_date), "%G-W%V")
-      }
-      
-      DT::datatable(
-        df,
-        options = list(
-          pageLength = 25, 
-          scrollX = TRUE,
-          columnDefs = list(list(className = 'dt-left', targets = "_all")),
-          order = list(list(1, 'desc'))
-        ),
-        rownames = FALSE
-      )
-    })
     
     output$download_data <- downloadHandler(
       filename = function() {

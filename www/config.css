@@ -282,3 +282,30 @@ body {
   opacity: 1 !important; /* Forces visibility */
   pointer-events: none; /* Disables hover effects */
 }
+
+/* ==========================================
+   7. PREPARED DATA PANEL
+   ========================================== */
+.summary-card {
+  background-color: white;
+  padding: 15px;
+  border-radius: 4px;
+  min-width: 150px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.summary-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.summary-value {
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.summary-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
