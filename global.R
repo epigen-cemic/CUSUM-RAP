@@ -36,5 +36,8 @@ config <- jsonlite::fromJSON(config_path)
 
 
 # Extract the desired levels from a country or a selection of countries
-geo_choices<- config$Argentina$levels
+# Define your variable
+active_country <- "Argentina"
+
+geo_choices <- config[[active_country]]$levels
 names(geo_choices) <- tools::toTitleCase(geo_choices)
