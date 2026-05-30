@@ -33,11 +33,17 @@ active_countries <- rap_active_countries(config)
 active_country <- rap_default_country(config)
 cusum_config_messages <- rap_validate_cusum_config(config)
 
-source("R/shared/api_pop_io.R")
-source("R/cusum/functions_parameters.R")
-source("R/cusum/functions_cusum.R")
-source("R/cusum/functions_plot.R")
-source("R/cusum/functions_io.R")
-source("R/cusum/mod_cusum.R")
-source("R/help_ui.R")
+# Load the remaining modules/helpers.
+app_files <- list.files(
+  "R",
+  pattern = "\\.R$",
+  full.names = TRUE,
+  recursive = TRUE
+)
 
+app_files <- app_files[
+  !grepl("^R/scripts/", app_files) &
+    app_files != "R/shared/config_helpers.R"
+]
+
+invisible(lapply(sort(app_files), source))
