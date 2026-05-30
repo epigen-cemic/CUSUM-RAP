@@ -335,12 +335,25 @@ prepare_weekly_data_geo <- function(df,
 
   required_cols <- generic_map[1:level_depth]
 
-  df_agg <- df %>%
-    dplyr::group_by(dplyr::across(dplyr::all_of(c(required_cols, col_year, col_week)))) %>%
-    dplyr::summarise(
-      n_cases = sum(.data[[col_cases]], na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
+  df_grouped <- df %>%
+    dplyr::group_by(dplyr::across(dplyr::all_of(c(required_cols, col_year, col_week))))
+
+  if ("population" %in% names(df)) {
+    df_agg <- df_grouped %>%
+      dplyr::summarise(
+        n_cases = sum(.data[[col_cases]], na.rm = TRUE),
+        population = sum(population, na.rm = TRUE),
+        .groups = "drop"
+      )
+  } else {
+    df_agg <- df_grouped %>%
+      dplyr::summarise(
+        n_cases = sum(.data[[col_cases]], na.rm = TRUE),
+        .groups = "drop"
+      )
+  }
+
+  df_agg <- df_agg %>%
     dplyr::rename(year = !!col_year, week = !!col_week) %>%
     dplyr::mutate(
       epi_date = cusum_iso_week_to_date(year, week)
@@ -372,6 +385,16 @@ prepare_weekly_data_geo <- function(df,
       epi_date = seq(min(epi_date), max(epi_date), by = "week"),
       fill = list(n_cases = 0)
     ) %>%
+    dplyr::arrange(analysis_unit_id, epi_date)
+
+  if ("population" %in% names(df_filled)) {
+    df_filled <- df_filled %>%
+      dplyr::group_by(analysis_unit_id) %>%
+      tidyr::fill(population, .direction = "downup") %>%
+      dplyr::ungroup()
+  }
+
+  df_filled <- df_filled %>%
     dplyr::ungroup() %>%
     dplyr::mutate(
       year = lubridate::isoyear(epi_date),
@@ -447,9 +470,20 @@ process_target_data <- function(raw_df,
       dplyr::slice(dplyr::n()) %>%
       dplyr::ungroup()
   } else {
-    df_dedup <- df_filtered %>%
-      dplyr::group_by(dplyr::across(dplyr::all_of(c(req_cols, "year", "week")))) %>%
-      dplyr::summarise(n_cases = sum(n_cases, na.rm = TRUE), .groups = "drop")
+    df_grouped <- df_filtered %>%
+      dplyr::group_by(dplyr::across(dplyr::all_of(c(req_cols, "year", "week"))))
+
+    if ("population" %in% names(df_filtered)) {
+      df_dedup <- df_grouped %>%
+        dplyr::summarise(
+          n_cases = sum(n_cases, na.rm = TRUE),
+          population = sum(population, na.rm = TRUE),
+          .groups = "drop"
+        )
+    } else {
+      df_dedup <- df_grouped %>%
+        dplyr::summarise(n_cases = sum(n_cases, na.rm = TRUE), .groups = "drop")
+    }
   }
 
   filled_df <- prepare_weekly_data_geo(

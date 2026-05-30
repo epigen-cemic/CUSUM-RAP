@@ -18,15 +18,7 @@ server <- function(input, output, session) {
   # 4. Call the Module Server
   # The ID "main_analysis" MUST match the ID used in the UI above.
   cusumServer("main_analysis")
-  
-  
-  
-  # When the user's browser session ends, kill the R process
-  # Specific for the portable version
-#  session$onSessionEnded(function() {
-#    stopApp()
-#    q("no")
-#  })
+
   
 }
 

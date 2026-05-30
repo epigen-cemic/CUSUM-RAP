@@ -79,15 +79,18 @@ cusumUI <- function(id) {
                          div(class = "variable-label", tags$label(class = "control-label", "Target ARL0 :"), 
                              numericInput(ns("param_arl0"), label = NULL, value = 100, min = 1)),
                          div(style = "min-height: 25px;"),
-                         div(class = "variable-label", tags$label(class = "control-label", "RR (Relative Risk):"), 
-                             numericInput(ns("param_rr"), label = NULL, value = 2, min = 1.01, step = 0.01)),
-                         div(style = "min-height: 25px;", uiOutput(ns("calc_k_text"))),
-                         div(class = "variable-label", tags$label(class = "control-label", "h (Threshold):"), 
-                             numericInput(ns("param_h"), label = NULL, value = 5, min = 0.001, step = 0.001)),
-                         div(style = "min-height: 25px;", uiOutput(ns("rec_text_h"))),
+                         div(class = "parameter-block",
+                             div(class = "variable-label", tags$label(class = "control-label", "RR (Relative Risk):"), 
+                                 numericInput(ns("param_rr"), label = NULL, value = 2, min = 1.01, step = 0.01)),
+                             uiOutput(ns("calc_k_text"))
+                         ),
+                         div(class = "parameter-block",
+                             div(class = "variable-label", tags$label(class = "control-label", "h (Threshold):"), 
+                                 numericInput(ns("param_h"), label = NULL, value = 5, min = 0.001, step = 0.001)),
+                             uiOutput(ns("rec_text_h"))
+                         ),
                          br(),
-                         br(),
-                         actionButton(ns("run_analysis"), "Run Analysis", class = "btn-default", style = "width: 100%; color: black;")
+                         actionButton(ns("run_analysis"), "Run Analysis", class = "dashboard-run-button")
                      )
               ), # Close column 3
               
@@ -101,25 +104,34 @@ cusumUI <- function(id) {
                                      br(),
                                      tags$p(class = "output-description",
                                             "Alerts are early warnings and require further epidemiological review. The detection period controls the recent weeks monitored for alarms."),
-                                     plotOutput(ns("plot_heatmap"), height = "600px")),
+                                     uiOutput(ns("plot_heatmap_ui"))),
                            tabPanel("Detailed View", 
                                      br(),
                                      tags$p(class = "output-description",
-                                            "Use this view to compare observed counts, expected counts, and the CUSUM process for a selected location."),
-                                     fluidRow(
-                                      column(6, selectInput(ns("unit_selector"), "Select Location:", choices = NULL)),
-                                      column(6, div(class = "pull-right",
-                                                    shinyjs::disabled(downloadButton(ns("download_series_plot"), "Download Bar Plot", class = "btn-info")),
-                                                    shinyjs::disabled(downloadButton(ns("download_process_plot"), "Download Trends", class = "btn-warning"))
-                                      ))
+                                            "Use this view to compare observed values, expected baseline values, and the CUSUM process for a selected location."),
+                                     div(class = "detail-view-toolbar",
+                                         div(class = "detail-view-downloads",
+                                             shinyjs::disabled(downloadButton(ns("download_series_plot"), "Download Bar Plot", class = "btn-info")),
+                                             shinyjs::disabled(downloadButton(ns("download_process_plot"), "Download Trends", class = "btn-warning"))
+                                         )
+                                     ),
+                                     div(class = "detail-view-selectors-row",
+                                         uiOutput(ns("unit_navigation_ui"))
+                                     ),
+                                    uiOutput(ns("selection_summary_ui")),
+                                    br(),
+                                    div(class = "detail-plot-card detail-plot-card-first",
+                                        uiOutput(ns("plot_series_ui"))
                                     ),
-                                    plotOutput(ns("plot_series")),
-                                    plotOutput(ns("plot_cusum_process"))
+                                    div(class = "detail-plot-divider"),
+                                    div(class = "detail-plot-card",
+                                        uiOutput(ns("plot_cusum_process_ui"))
+                                    )
                            ),
                            tabPanel("Analysis Results", 
                                      br(),
                                      shinyjs::disabled(
-                                       downloadButton(ns("download_data"), "Download Results CSV", class = "btn-default")
+                                       downloadButton(ns("download_data"), "Download Results CSV", class = "btn-info")
                                      ),
                                      br(), br(),
                                      DT::DTOutput(ns("table_preview"))
@@ -142,7 +154,7 @@ cusumUI <- function(id) {
                            ),
                            tabPanel("Help",
                                     br(),
-                                    cusum_help_tab()
+                                    cusum_help_tab(ns)
                            )
                          )
                      )
@@ -191,6 +203,98 @@ cusumServer <- function(id) {
     })
 
     ns <- session$ns
+
+    current_font_size_key <- reactive({
+      value <- input$font_size
+      if (is.null(value) || !nzchar(value)) "small" else value
+    })
+
+    display_digits <- reactive({
+      value <- suppressWarnings(as.integer(input$display_digits))
+      if (is.na(value)) 4L else max(0L, min(8L, value))
+    })
+
+    plot_font_size <- reactive({
+      switch(current_font_size_key(),
+             "small" = 18,
+             "medium" = 20,
+             "large" = 22,
+             "xlarge" = 24,
+             18)
+    })
+
+
+    plot_height_px <- reactive({
+      # Keep the detailed plots wide instead of square.
+      # Font size increases get extra vertical room, but not enough to push
+      # the plots outside their cards or overlap the following plot.
+      switch(current_font_size_key(),
+             "small" = 500,
+             "medium" = 560,
+             "large" = 630,
+             "xlarge" = 700,
+             500)
+    })
+
+    heatmap_height_px <- reactive({
+      switch(current_font_size_key(),
+             "small" = 600,
+             "medium" = 680,
+             "large" = 760,
+             "xlarge" = 840,
+             600)
+    })
+
+    download_plot_width_in <- reactive({
+      switch(current_font_size_key(),
+             "small" = 16,
+             "medium" = 17,
+             "large" = 18,
+             "xlarge" = 19,
+             16)
+    })
+
+    download_plot_height_in <- reactive({
+      # Preserve a wide 16:9-style aspect ratio in exported PNGs.
+      download_plot_width_in() * 9 / 16
+    })
+
+    observe({
+      size_class <- paste0("font-size-", current_font_size_key())
+      shinyjs::runjs(sprintf(
+        "document.body.classList.remove('font-size-small','font-size-medium','font-size-large','font-size-xlarge'); document.body.classList.add('%s');",
+        size_class
+      ))
+    })
+
+    detail_select_width <- function(choices, label = NULL) {
+      choices <- as.character(choices)
+      choices <- choices[!is.na(choices)]
+      max_chars <- 0
+      if (length(choices) > 0) {
+        max_chars <- max(nchar(choices, type = "width"), na.rm = TRUE)
+      }
+      if (!is.null(label) && nzchar(label)) {
+        max_chars <- max(max_chars, nchar(label, type = "width"))
+      }
+
+      char_px <- switch(current_font_size_key(),
+                        "small" = 7.2,
+                        "medium" = 8.0,
+                        "large" = 8.8,
+                        "xlarge" = 9.6,
+                        7.2)
+      min_px <- switch(current_font_size_key(),
+                       "small" = 180,
+                       "medium" = 205,
+                       "large" = 230,
+                       "xlarge" = 255,
+                       180)
+
+      # Extra room accounts for left/right padding and the select arrow.
+      width_px <- ceiling(max(min_px, min(620, (max_chars * char_px) + 72)))
+      paste0(width_px, "px")
+    }
     
 # ---------------------------------------------------------
     # 0. INITIALIZATION
@@ -574,10 +678,10 @@ cusumServer <- function(id) {
     output$calc_k_text <- renderUI({
       k_val <- current_k()
       if (!is.null(k_val)) {
-        tags$small(style = "color: #f9ff42; font-style: italic; display: block; text-align: right; margin-top: -10px; margin-bottom: 10px;", 
+        tags$small(class = "parameter-helper-text", 
                    paste("Calculated k:", round(k_val, 3)))
       } else {
-        tags$small(style = "color: #cccccc; font-style: italic; display: block; text-align: right; margin-top: -10px; margin-bottom: 10px;", 
+        tags$small(class = "parameter-helper-text parameter-helper-muted", 
                    "k will be calculated automatically.")
       }
     })
@@ -589,12 +693,12 @@ cusumServer <- function(id) {
       
       if (!is.na(rec_val)) {
         tags$small(
-          style = "color: #f9ff42; font-style: italic; display: block; text-align: right; margin-top: -10px; margin-bottom: 10px;", 
+          class = "parameter-helper-text", 
           paste("Recommended h:", rec_val)
         )
       } else {
         tags$small(
-          style = "color: #ff4242; font-style: italic; display: block; text-align: right; margin-top: -10px; margin-bottom: 10px;", 
+          class = "parameter-helper-text parameter-helper-error", 
           "Unable to calculate h recommendation."
         )
       }
@@ -666,9 +770,210 @@ cusumServer <- function(id) {
       return(res)
     })
     
-    observeEvent(analyzed_data(), {
-      units <- unique(analyzed_data()$analysis_unit_id)
-      updateSelectInput(session, "unit_selector", choices = units)
+    detail_level_depth <- reactive({
+      req(input$geo_level)
+      h_levels <- hierarchy_levels_list()
+      level_depth <- which(h_levels == input$geo_level)
+      if (length(level_depth) == 0 || is.na(level_depth)) return(NULL)
+      level_depth
+    })
+
+    detail_geo_columns <- reactive({
+      req(detail_level_depth())
+      generic_map <- c("country", "level1", "level2", "level3", "level4")
+      generic_map[seq_len(detail_level_depth())]
+    })
+
+    detail_geo_labels <- reactive({
+      req(detail_level_depth())
+      labels <- hierarchy_levels_list()[seq_len(detail_level_depth())]
+      tools::toTitleCase(labels)
+    })
+
+    output$unit_navigation_ui <- renderUI({
+      req(analyzed_data(), detail_geo_columns(), detail_geo_labels())
+
+      df <- analyzed_data()
+      cols <- detail_geo_columns()
+      labels <- detail_geo_labels()
+      cols <- cols[cols %in% names(df)]
+      labels <- labels[seq_along(cols)]
+
+      if (length(cols) == 0) return(NULL)
+
+      selectors <- list()
+      filtered_df <- df
+
+      for (i in seq_along(cols)) {
+        col <- cols[i]
+        input_id <- paste0("detail_", col)
+        choices <- sort(unique(as.character(filtered_df[[col]])))
+        choices <- choices[!is.na(choices) & choices != ""]
+        if (length(choices) == 0) next
+
+        current_value <- input[[input_id]]
+        selected_value <- if (!is.null(current_value) && current_value %in% choices) current_value else choices[1]
+
+        selectors[[length(selectors) + 1]] <- div(
+          class = "detail-location-selector",
+          selectizeInput(
+            ns(input_id),
+            labels[i],
+            choices = choices,
+            selected = selected_value,
+            width = detail_select_width(choices, labels[i]),
+            options = list(
+              dropdownParent = "body",
+              maxOptions = 10000
+            )
+          )
+        )
+
+        filtered_df <- filtered_df %>%
+          dplyr::filter(as.character(.data[[col]]) == selected_value)
+      }
+
+      tagList(
+        tags$label(class = "control-label", "Select Location"),
+        div(class = "detail-location-selectors", selectors)
+      )
+    })
+
+    selected_unit_id <- reactive({
+      req(analyzed_data(), detail_geo_columns())
+
+      df <- analyzed_data()
+      cols <- detail_geo_columns()
+      cols <- cols[cols %in% names(df)]
+      if (length(cols) == 0) return(NULL)
+
+      filtered_df <- df
+      for (col in cols) {
+        input_id <- paste0("detail_", col)
+        choices <- sort(unique(as.character(filtered_df[[col]])))
+        choices <- choices[!is.na(choices) & choices != ""]
+        if (length(choices) == 0) return(NULL)
+
+        selected_value <- input[[input_id]]
+        if (is.null(selected_value) || !(selected_value %in% choices)) {
+          selected_value <- choices[1]
+        }
+
+        filtered_df <- filtered_df %>%
+          dplyr::filter(as.character(.data[[col]]) == selected_value)
+      }
+
+      units <- unique(filtered_df$analysis_unit_id)
+      if (length(units) == 0) return(NULL)
+      units[1]
+    })
+
+    format_summary_value <- function(value, digits = NULL) {
+      if (is.null(value) || length(value) == 0 || all(is.na(value))) return("Not available")
+      value <- value[!is.na(value)][1]
+      if (is.numeric(value)) {
+        if (!is.null(digits)) return(format(round(value, digits), big.mark = ",", trim = TRUE, scientific = FALSE))
+        return(format(value, big.mark = ",", trim = TRUE, scientific = FALSE))
+      }
+      as.character(value)
+    }
+
+    output$selection_summary_ui <- renderUI({
+      req(analyzed_data(), selected_unit_id())
+
+      df_unit <- analyzed_data() %>%
+        dplyr::filter(analysis_unit_id == selected_unit_id())
+      req(nrow(df_unit) > 0)
+
+      cols <- detail_geo_columns()
+      labels <- detail_geo_labels()
+      cols <- cols[cols %in% names(df_unit)]
+      labels <- labels[seq_along(cols)]
+
+      location_items <- lapply(seq_along(cols), function(i) {
+        current_col <- cols[[i]]
+        current_label <- labels[[i]]
+        current_value <- unique(df_unit[[current_col]])
+        formatted_value <- format_summary_value(current_value)
+
+        label_element <- span(
+          class = "selection-summary-label",
+          paste0(current_label, ":")
+        )
+
+        value_element <- span(
+          class = "selection-summary-value",
+          formatted_value
+        )
+
+        div(
+          class = "selection-summary-item",
+          label_element,
+          value_element
+        )
+      })
+
+      date_range <- "Not available"
+      weeks_analyzed <- "Not available"
+      if ("epi_date" %in% names(df_unit)) {
+        date_range <- paste0(
+          format(min(as.Date(df_unit$epi_date), na.rm = TRUE), "%G-W%V"),
+          " to ",
+          format(max(as.Date(df_unit$epi_date), na.rm = TRUE), "%G-W%V")
+        )
+        weeks_analyzed <- format_summary_value(dplyr::n_distinct(df_unit$epi_date))
+      }
+
+      population_label <- "Not available"
+      if ("population" %in% names(df_unit)) {
+        valid_pop <- df_unit$population[!is.na(df_unit$population) & df_unit$population > 0]
+        if (length(valid_pop) > 0) {
+          population_label <- format(round(stats::median(valid_pop, na.rm = TRUE)), big.mark = ",", trim = TRUE, scientific = FALSE)
+        }
+      }
+
+      alarm_label <- "No"
+      latest_alarm_label <- "None"
+      if ("alarm" %in% names(df_unit) && any(df_unit$alarm, na.rm = TRUE)) {
+        alarm_label <- "Yes"
+        alarm_rows <- df_unit[df_unit$alarm %in% TRUE, , drop = FALSE]
+        if ("epi_date" %in% names(alarm_rows) && nrow(alarm_rows) > 0) {
+          latest_alarm_label <- format(max(as.Date(alarm_rows$epi_date), na.rm = TRUE), "%G-W%V")
+        }
+      }
+
+      tagList(
+        div(class = "selection-summary-card",
+            div(class = "selection-summary-title", "Current selection summary"),
+            div(class = "selection-summary-grid",
+                location_items,
+                div(class = "selection-summary-item",
+                    span(class = "selection-summary-label", "Analysis level:"),
+                    span(class = "selection-summary-value", format_summary_value(input$geo_level))
+                ),
+                div(class = "selection-summary-item",
+                    span(class = "selection-summary-label", "Weeks analyzed:"),
+                    span(class = "selection-summary-value", weeks_analyzed)
+                ),
+                div(class = "selection-summary-item",
+                    span(class = "selection-summary-label", "Date range:"),
+                    span(class = "selection-summary-value", date_range)
+                ),
+                div(class = "selection-summary-item",
+                    span(class = "selection-summary-label", "Population:"),
+                    span(class = "selection-summary-value", population_label)
+                ),
+                div(class = "selection-summary-item",
+                    span(class = "selection-summary-label", "Alarms detected:"),
+                    span(class = "selection-summary-value", alarm_label)
+                ),
+                div(class = "selection-summary-item",
+                    span(class = "selection-summary-label", "Most recent alarm:"),
+                    span(class = "selection-summary-value", latest_alarm_label)
+                )
+            )
+        )
+      )
     })
     
     # ---------------------------------------------------------
@@ -676,37 +981,59 @@ cusumServer <- function(id) {
     # ---------------------------------------------------------
     heatmap_obj <- reactive({
       req(analyzed_data())
-      plot_cusum_alarms_overview(analyzed_data())
+      plot_cusum_alarms_overview(analyzed_data(), base_size = plot_font_size())
     })
     
     series_plot_obj <- reactive({
-      req(analyzed_data(), input$unit_selector)
+      req(analyzed_data(), selected_unit_id())
       df_unit <- analyzed_data() %>% 
-        dplyr::filter(analysis_unit_id == input$unit_selector)
+        dplyr::filter(analysis_unit_id == selected_unit_id())
       
-      plot_cusum_series_unit(df_unit, unit_label = input$unit_selector)
+      plot_cusum_series_unit(df_unit, unit_label = selected_unit_id(), base_size = plot_font_size())
     })
     
     process_plot_obj <- reactive({
-      req(analyzed_data(), input$unit_selector)
+      req(analyzed_data(), selected_unit_id())
       df_unit <- analyzed_data() %>% 
-        dplyr::filter(analysis_unit_id == input$unit_selector)
+        dplyr::filter(analysis_unit_id == selected_unit_id())
       
       unit_k <- unique(df_unit$k_value)[1]
+      unit_rate <- NA_real_
+      if (all(c("mu_hat", "population") %in% names(df_unit))) {
+        valid_pop <- !is.na(df_unit$population) & df_unit$population > 0
+        if (any(valid_pop)) {
+          unit_rate <- mean((df_unit$mu_hat[valid_pop] / df_unit$population[valid_pop]) * 100000, na.rm = TRUE)
+        }
+      }
       
       plot_cusum_process_unit(df_unit, 
-                              unit_label = input$unit_selector, 
+                              unit_label = selected_unit_id(), 
                               h = input$param_h,
                               k = unit_k,
-                              arl0 = input$param_arl0)
+                              arl0 = input$param_arl0,
+                              rr = input$param_rr,
+                              rate_per_100k = unit_rate,
+                              base_size = plot_font_size())
     })
     
     # ---------------------------------------------------------
     # 7. RENDERING & BUTTON CONTROL
     # ---------------------------------------------------------
-    output$plot_heatmap <- renderPlot({ heatmap_obj() })
-    output$plot_series  <- renderPlot({ series_plot_obj() })
-    output$plot_cusum_process <- renderPlot({ process_plot_obj() })
+    output$plot_heatmap_ui <- renderUI({
+      plotOutput(ns("plot_heatmap"), height = paste0(heatmap_height_px(), "px"))
+    })
+
+    output$plot_series_ui <- renderUI({
+      plotOutput(ns("plot_series"), height = paste0(plot_height_px(), "px"))
+    })
+
+    output$plot_cusum_process_ui <- renderUI({
+      plotOutput(ns("plot_cusum_process"), height = paste0(plot_height_px(), "px"))
+    })
+
+    output$plot_heatmap <- renderPlot({ heatmap_obj() }, height = function() heatmap_height_px())
+    output$plot_series  <- renderPlot({ series_plot_obj() }, height = function() plot_height_px())
+    output$plot_cusum_process <- renderPlot({ process_plot_obj() }, height = function() plot_height_px())
     
     output$table_preview <- DT::renderDT({
       req(analyzed_data())
@@ -717,11 +1044,25 @@ cusumServer <- function(id) {
         df$epi_date <- format(as.Date(df$epi_date), "%G-W%V")
       }
       
-      DT::datatable(df, options = list(
+      dt <- DT::datatable(df, options = list(
           pageLength = 25, scrollX = TRUE,
           columnDefs = list(list(className = 'dt-left', targets = "_all")),
           order = list(list(1, 'desc'))),
         rownames = FALSE)
+
+      numeric_cols <- names(df)[vapply(df, is.numeric, logical(1))]
+      decimal_cols <- numeric_cols[vapply(numeric_cols, function(col) {
+        values <- df[[col]]
+        values <- values[!is.na(values)]
+        if (length(values) == 0) return(FALSE)
+        any(abs(values - round(values)) > .Machine$double.eps^0.5)
+      }, logical(1))]
+
+      if (length(decimal_cols) > 0) {
+        dt <- DT::formatRound(dt, columns = decimal_cols, digits = display_digits())
+      }
+
+      dt
     })
     
     observe({
@@ -876,23 +1217,23 @@ cusumServer <- function(id) {
     # ---------------------------------------------------------
     output$download_series_plot <- downloadHandler(
       filename = function() {
-        clean_name <- sub(".*\\|", "", input$unit_selector)
+        clean_name <- sub(".*\\|", "", selected_unit_id())
         paste0("CUSUM_Bar_plot_", clean_name, "_", Sys.Date(), ".png")
       },
       content = function(file) {
         ggplot2::ggsave(file, plot = series_plot_obj(), 
-                        device = "png", width = 16, height = 7, dpi = 300)
+                        device = "png", width = download_plot_width_in(), height = download_plot_height_in(), dpi = 300)
       }
     )
     
     output$download_process_plot <- downloadHandler(
       filename = function() {
-        clean_name <- sub(".*\\|", "", input$unit_selector)
+        clean_name <- sub(".*\\|", "", selected_unit_id())
         paste0("CUSUM_Trends_", clean_name, "_", Sys.Date(), ".png")
       },
       content = function(file) {
         ggplot2::ggsave(file, plot = process_plot_obj(), 
-                        device = "png", width = 16, height = 7, dpi = 300)
+                        device = "png", width = download_plot_width_in(), height = download_plot_height_in(), dpi = 300)
       }
     )
     

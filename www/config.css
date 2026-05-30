@@ -5,7 +5,7 @@
   --nav-bg-color: #2d332a;    /* Dark Olive/Black */
   --hero-bg-color: #5b6d5b;   /* Muted Sage Green */
   --menu-opaque-green: rgba(91, 109, 91, 0.85); 
-  --sidebar-bg: #4a4a4a;
+  --sidebar-bg: #1E2A15;
   --bg-light: #f4f4f4;
 }
 
@@ -185,6 +185,31 @@ body {
   margin-bottom: 15px; 
 }
 
+.parameter-block {
+  margin-bottom: 12px;
+}
+
+.parameter-block .variable-label {
+  margin-bottom: 4px;
+}
+
+.parameter-helper-text {
+  color: #f9ff42;
+  font-style: italic;
+  display: block;
+  text-align: left;
+  margin: 0 0 6px 0;
+  padding-left: 0;
+}
+
+.parameter-helper-muted {
+  color: #cccccc;
+}
+
+.parameter-helper-error {
+  color: #ff4242;
+}
+
 .sidebar-dark input {
   background-color: #ffffff !important; 
   color: #333333 !important;
@@ -274,6 +299,78 @@ body {
   color: white !important;
 }
 
+
+.dashboard-run-button {
+  width: 100%;
+  background: #F69342 !important;
+  color: #1E2A15 !important;
+  border: 1px solid #F69342 !important;
+  border-radius: 4px;
+  font-weight: 800;
+  white-space: nowrap;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 10px 12px;
+  line-height: 1.2;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.dashboard-run-button:hover,
+.dashboard-run-button:focus {
+  background: #d97923 !important;
+  border-color: #d97923 !important;
+  color: #1E2A15 !important;
+}
+
+.detail-location-selectors {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px 12px;
+  align-items: end;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.detail-location-selector {
+  flex: 0 0 auto;
+  max-width: none;
+}
+
+.detail-location-selectors .form-group,
+.detail-location-selectors .selectize-control {
+  margin-bottom: 0;
+  max-width: none;
+}
+
+.detail-location-selectors .selectize-input {
+  min-height: 36px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detail-location-selectors .selectize-input > div,
+.detail-location-selectors .selectize-input .item {
+  max-width: calc(100% - 28px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detail-location-selectors .selectize-dropdown {
+  min-width: 100%;
+  width: max-content !important;
+  max-width: min(620px, calc(100vw - 80px));
+}
+
+.detail-location-selectors .selectize-dropdown-content .option {
+  white-space: nowrap;
+}
+
 /* Explicit Disabled State to prevent invisible buttons */
 .btn-info[disabled], .btn-warning[disabled], .btn-primary[disabled], .btn-default[disabled] {
   background-color: #e0e0e0 !important;
@@ -316,6 +413,24 @@ body {
   color: #666666;
   margin: 0 0 10px 0;
   line-height: 1.45;
+}
+
+.detail-plot-card {
+  background: #ffffff;
+  border: 1px solid #dfe5dc;
+  border-radius: 4px;
+  padding: 12px 14px 8px 14px;
+  margin-bottom: 18px;
+}
+
+.detail-plot-card-first {
+  margin-top: 6px;
+}
+
+.detail-plot-divider {
+  height: 2px;
+  background: #d8dfd4;
+  margin: 8px 0 18px 0;
 }
 
 .dashboard-error {
@@ -544,4 +659,278 @@ body {
 .uploaded-files-table .checkbox,
 .uploaded-files-table input[type="checkbox"] {
   margin: 0;
+}
+
+/* ==========================================
+   USER-CONTROLLED FONT SIZE
+   Small is the previous/default size.
+   ========================================== */
+body.font-size-small {
+  font-size: 14px;
+}
+
+body.font-size-medium {
+  font-size: 15.5px;
+}
+
+body.font-size-large {
+  font-size: 17px;
+}
+
+body.font-size-xlarge {
+  font-size: 18.5px;
+}
+
+body.font-size-medium .control-label,
+body.font-size-medium .custom-navbar a,
+body.font-size-medium .output-description,
+body.font-size-medium .requirements-table,
+body.font-size-medium .prepared-log {
+  font-size: 1.08em;
+}
+
+body.font-size-large .control-label,
+body.font-size-large .custom-navbar a,
+body.font-size-large .output-description,
+body.font-size-large .requirements-table,
+body.font-size-large .prepared-log {
+  font-size: 1.16em;
+}
+
+body.font-size-xlarge .control-label,
+body.font-size-xlarge .custom-navbar a,
+body.font-size-xlarge .output-description,
+body.font-size-xlarge .requirements-table,
+body.font-size-xlarge .prepared-log {
+  font-size: 1.26em;
+}
+
+body.font-size-medium .selectize-input,
+body.font-size-medium .form-control,
+body.font-size-medium .btn {
+  font-size: 15px;
+}
+
+body.font-size-large .selectize-input,
+body.font-size-large .form-control,
+body.font-size-large .btn {
+  font-size: 16px;
+}
+
+body.font-size-xlarge .selectize-input,
+body.font-size-xlarge .form-control,
+body.font-size-xlarge .btn {
+  font-size: 17px;
+}
+
+body.font-size-medium .detail-location-selectors .selectize-input {
+  min-height: 39px;
+}
+
+body.font-size-large .detail-location-selectors .selectize-input {
+  min-height: 42px;
+}
+
+body.font-size-xlarge .detail-location-selectors .selectize-input {
+  min-height: 45px;
+}
+
+
+/* ==========================================
+   DETAILED VIEW SUMMARY CARD
+   ========================================== */
+.selection-summary-card {
+  background: #f7f8f4;
+  border: 1px solid #d9dfcf;
+  border-left: 5px solid var(--sidebar-bg);
+  border-radius: 6px;
+  padding: 16px 18px;
+  margin: 16px 0 8px 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.selection-summary-title {
+  color: var(--sidebar-bg);
+  font-weight: 700;
+  font-size: 17px;
+  margin-bottom: 10px;
+}
+
+.selection-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 8px 24px;
+}
+
+.selection-summary-item {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.selection-summary-label {
+  font-weight: 700;
+  color: #48563F;
+  white-space: nowrap;
+}
+
+.selection-summary-value {
+  color: #333333;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .selection-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.help-note {
+  color: #555;
+  font-size: 0.95em;
+  margin-top: 6px;
+}
+
+/* Detailed View layout refinements */
+.detail-view-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.detail-view-downloads {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.detail-view-selectors-row {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.detail-view-selectors-row .detail-location-selectors {
+  width: max-content;
+  min-width: 100%;
+  flex-wrap: nowrap !important;
+}
+
+.detail-location-selector,
+.detail-location-selectors .form-group,
+.detail-location-selectors .selectize-control,
+.detail-location-selectors .selectize-input,
+.detail-location-selectors .selectize-input > div,
+.detail-location-selectors .selectize-input .item {
+  white-space: nowrap !important;
+}
+
+.detail-location-selectors .selectize-input {
+  height: auto;
+  line-height: 1.25;
+  display: flex;
+  align-items: center;
+}
+
+.detail-location-selectors .selectize-input > input {
+  flex: 0 1 auto !important;
+  min-width: 1px !important;
+}
+
+.detail-plot-divider {
+  height: auto;
+  background: transparent;
+  border-top: 2px solid #d8dfd4;
+  margin: 20px 0 28px 0;
+}
+
+/* Keep calculated/recommended parameter notes visually attached to their own input. */
+.parameter-block {
+  margin-bottom: 14px;
+}
+
+.parameter-block .variable-label {
+  margin-bottom: 2px;
+}
+
+.parameter-helper-text {
+  margin-top: -2px;
+  margin-bottom: 8px;
+}
+
+
+/* Plot cards: keep Shiny plot outputs contained and clearly separated. */
+.detail-plot-card {
+  overflow: visible;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding-bottom: 10px;
+}
+
+.detail-plot-card .shiny-bound-output,
+.detail-plot-card .shiny-plot-output {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: visible;
+}
+
+.detail-plot-card img {
+  max-width: 100%;
+  height: auto;
+}
+
+.detail-plot-divider {
+  border-top: 3px solid #d8dfd4;
+  margin: 28px 0 32px 0;
+}
+
+/* Keep yellow calculated/recommended notes tightly attached to their parameter. */
+.parameter-block {
+  margin-bottom: 10px;
+}
+
+.parameter-block .variable-label {
+  margin-bottom: 0;
+}
+
+.parameter-helper-text {
+  margin-top: 0;
+  margin-bottom: 6px;
+  line-height: 1.15;
+}
+
+/* Keep Detailed View selectors on one line without clipping open dropdown menus. */
+.detail-view-selectors-row,
+.detail-location-selectors {
+  overflow: visible !important;
+}
+
+.detail-location-selectors {
+  position: relative;
+  z-index: 20;
+}
+
+.detail-location-selector {
+  position: relative;
+  z-index: 21;
+}
+
+.detail-location-selectors .selectize-control.single .selectize-input {
+  overflow: hidden !important;
+}
+
+.selectize-dropdown {
+  z-index: 9999 !important;
+}
+
+.selectize-dropdown .selectize-dropdown-content {
+  max-height: 260px !important;
+  overflow-y: auto !important;
 }

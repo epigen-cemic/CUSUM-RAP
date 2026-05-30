@@ -1,5 +1,5 @@
 {
-  "is_offline": false,
+  "is_offline": true,
   "active_country": "Argentina",
   "cusum": {
     "default_detection_period": 52,

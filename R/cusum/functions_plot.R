@@ -20,6 +20,80 @@ clean_unit_label <- function(x, max_width = NULL) {
   out
 }
 
+make_heatmap_location_labels <- function(df, unit_var = "analysis_unit_id", max_width = NULL) {
+  if (!unit_var %in% names(df)) {
+    return(rep(NA_character_, nrow(df)))
+  }
+
+  geo_cols <- intersect(c("country", "level1", "level2", "level3", "level4"), names(df))
+  if (length(geo_cols) == 0) {
+    return(clean_unit_label(df[[unit_var]], max_width = max_width))
+  }
+
+  unit_geo <- df %>%
+    dplyr::select(dplyr::all_of(c(unit_var, geo_cols))) %>%
+    dplyr::distinct()
+
+  deepest_col <- geo_cols[length(geo_cols)]
+  parent_col <- if (length(geo_cols) >= 2) geo_cols[length(geo_cols) - 1] else NULL
+
+  unit_geo <- unit_geo %>%
+    dplyr::mutate(
+      .base_label = as.character(.data[[deepest_col]]),
+      .base_label = dplyr::if_else(is.na(.base_label) | .base_label == "", clean_unit_label(.data[[unit_var]]), .base_label)
+    )
+
+  duplicated_base <- unit_geo$.base_label[duplicated(unit_geo$.base_label) | duplicated(unit_geo$.base_label, fromLast = TRUE)]
+
+  if (!is.null(parent_col) && length(duplicated_base) > 0) {
+    unit_geo <- unit_geo %>%
+      dplyr::mutate(
+        .parent_label = as.character(.data[[parent_col]]),
+        .clean_label = dplyr::if_else(
+          .base_label %in% duplicated_base & !is.na(.parent_label) & .parent_label != "",
+          paste(.parent_label, .base_label, sep = " / "),
+          .base_label
+        )
+      )
+  } else {
+    unit_geo$.clean_label <- unit_geo$.base_label
+  }
+
+  if (!is.null(max_width) && requireNamespace("stringr", quietly = TRUE)) {
+    unit_geo$.clean_label <- stringr::str_trunc(unit_geo$.clean_label, max_width)
+  }
+
+  lookup <- stats::setNames(unit_geo$.clean_label, unit_geo[[unit_var]])
+  unname(lookup[as.character(df[[unit_var]])])
+}
+
+
+add_prevalence_plot_columns <- function(df_unit,
+                                        count_var = "n_cases",
+                                        mu_var = "mu_hat",
+                                        population_var = "population") {
+  has_population <- population_var %in% names(df_unit) &&
+    any(!is.na(df_unit[[population_var]]) & df_unit[[population_var]] > 0)
+
+  if (!has_population) {
+    df_unit$.plot_observed <- df_unit[[count_var]]
+    df_unit$.plot_expected <- df_unit[[mu_var]]
+    attr(df_unit, "plot_y_label") <- "Case count"
+    attr(df_unit, "plot_subtitle") <- "Observed weekly counts compared with the expected baseline."
+    attr(df_unit, "plot_caption") <- "Black line = expected baseline frequency.\nRed points = weeks with CUSUM alarms. Population data were not available, so this plot shows case counts instead of prevalence."
+    return(df_unit)
+  }
+
+  population <- df_unit[[population_var]]
+  population[is.na(population) | population <= 0] <- NA_real_
+
+  df_unit$.plot_observed <- (df_unit[[count_var]] / population) * 100000
+  df_unit$.plot_expected <- (df_unit[[mu_var]] / population) * 100000
+  attr(df_unit, "plot_y_label") <- "Prevalence"
+  attr(df_unit, "plot_subtitle") <- "Observed weekly values compared with the expected baseline per 100,000 people."
+  attr(df_unit, "plot_caption") <- "Black line = expected baseline prevalence.\nRed points = weeks with CUSUM alarms."
+  df_unit
+}
 
 #' @title Smart X-Axis Labeler for Epidemiological Timelines
 #'
@@ -120,29 +194,41 @@ plot_cusum_series_unit <- function(df_unit,
                                    x_var      = "time_index",
                                    count_var  = "n_cases",
                                    mu_var     = "mu_hat",
-                                   alarm_var  = "alarm") {
+                                   alarm_var  = "alarm",
+                                   base_size  = 18) {
   
   # Clean unit label if it contains pipes (e.g. Argentina|Catamarca|Ambato)
   clean_title <- if (!is.null(unit_label)) clean_unit_label(unit_label) else "Observed vs Expected"
+  df_unit <- add_prevalence_plot_columns(df_unit, count_var = count_var, mu_var = mu_var)
   
-  x_sym     <- rlang::sym(x_var)
-  count_sym <- rlang::sym(count_var)
-  mu_sym    <- rlang::sym(mu_var)
+  x_sym <- rlang::sym(x_var)
   
   # Calculate dynamic breaks
   my_breaks <- get_smart_breaks(df_unit, x_var)
   
   ggplot(df_unit, aes(x = !!x_sym)) +
-    geom_col(aes(y = !!count_sym), fill = cusum_plot_colours$blue, alpha = 0.45) +
-    geom_line(aes(y = !!mu_sym), color = "black", linewidth = 1) +
+    geom_col(aes(y = .plot_observed), fill = cusum_plot_colours$blue, alpha = 0.45) +
+    geom_line(aes(y = .plot_expected), color = "black", linewidth = 1) +
     geom_point(
       data = df_unit[df_unit[[alarm_var]] == TRUE, ],
-      aes(y = !!count_sym), size = 4, color = cusum_plot_colours$alarm
+      aes(y = .plot_observed), size = 4, color = cusum_plot_colours$alarm
     ) +
     scale_x_continuous(breaks = my_breaks, labels = function(b) smart_labs(b, df_unit)) +
-    labs(x = "Timeline\n(Week / Year)", y = "Weekly counts", title = paste("Unit:", clean_title)) +
-    theme_bw(base_size = 18) + 
-    theme(plot.title = element_text(face = "bold"),
+    labs(
+      x = "Timeline\n(Week / Year)",
+      y = attr(df_unit, "plot_y_label"),
+      title = paste("Unit:", clean_title),
+      subtitle = attr(df_unit, "plot_subtitle"),
+      caption = attr(df_unit, "plot_caption")
+    ) +
+    theme_bw(base_size = base_size) + 
+    theme(
+          plot.title = element_text(face = "bold", margin = margin(b = 6)),
+          plot.subtitle = element_text(size = base_size * 0.82, color = "gray20", margin = margin(b = 10)),
+          plot.caption = element_text(size = base_size * 0.70, hjust = 0, lineheight = 1.10, margin = margin(t = 8)),
+          axis.title.x = element_text(margin = margin(t = 8)),
+          axis.title.y = element_text(margin = margin(r = 12)),
+          plot.margin = margin(12, 16, 18, 18),
           panel.grid.minor = element_blank())
 }
 
@@ -170,7 +256,10 @@ plot_cusum_process_unit <- function(df_unit,
                                     alarm_var  = "alarm",
                                     h          = 2.26,
                                     k          = 1.04,
-                                    arl0       = 370) {
+                                    arl0       = 370,
+                                    rr         = NA_real_,
+                                    rate_per_100k = NA_real_,
+                                    base_size  = 18) {
   
   # Clean the title (e.g., remove "Argentina|")
   clean_title <- if (!is.null(unit_label)) clean_unit_label(unit_label) else "CUSUM Process"
@@ -185,7 +274,17 @@ plot_cusum_process_unit <- function(df_unit,
   alarms_only <- df_unit[df_unit[[alarm_var]] == TRUE, ]
   
   # Format the subtitle to display parameters
-  param_subtitle <- sprintf("ARL0= %.2f   h= %.3f   k= %.3f", arl0, h, k)
+  rr_label <- if (is.na(rr)) "NA" else sprintf("%.3f", rr)
+  rate_label <- if (is.na(rate_per_100k)) "NA" else sprintf("%.3f", rate_per_100k)
+  param_subtitle <- sprintf(
+    "ARL0= %.2f   RR= %s   h= %.3f   k= %.3f   rate per 100,000 people= %s",
+    arl0, rr_label, h, k, rate_label
+  )
+
+  y_breaks <- sort(unique(c(pretty(df_unit[[cusum_var]]), h)))
+  y_labels <- function(x) {
+    ifelse(abs(x - h) < .Machine$double.eps^0.5, paste0("h = ", format(round(h, 3), nsmall = 3)), as.character(x))
+  }
   
   ggplot(df_unit, aes(x = !!x_sym, y = !!cusum_sym)) +
     # 1. The main blue line (CUSUM Score)
@@ -198,13 +297,20 @@ plot_cusum_process_unit <- function(df_unit,
     geom_point(data = alarms_only, aes(y = !!cusum_sym), size = 4, color = cusum_plot_colours$alarm) +
     
     scale_x_continuous(breaks = my_breaks, labels = function(b) smart_labs(b, df_unit)) +
+    scale_y_continuous(breaks = y_breaks, labels = y_labels) +
     labs(x = "Timeline\n(Week / Year)", 
          y = "CUSUM Score (S_n)", 
          title = "Standardized Residual CUSUM (reset at alarms)",
-         subtitle = param_subtitle) +
-    theme_minimal(base_size = 18) +
-    theme(plot.title = element_text(face = "bold"),
-          plot.subtitle = element_text(size = 14, color = "gray20"),
+         subtitle = param_subtitle,
+         caption = "Red dashed line = h decision threshold. Red points = weeks where the CUSUM score reached or crossed h.\nThe CUSUM score is based on standardized weekly deviations; interpret location burden with prevalence per 100,000 people when population data are available.") +
+    theme_minimal(base_size = base_size) +
+    theme(
+          plot.title = element_text(face = "bold", margin = margin(b = 6)),
+          plot.subtitle = element_text(size = base_size * 0.78, color = "gray20", margin = margin(b = 10)),
+          plot.caption = element_text(size = base_size * 0.70, hjust = 0, lineheight = 1.10, margin = margin(t = 8)),
+          axis.title.x = element_text(margin = margin(t = 8)),
+          axis.title.y = element_text(margin = margin(r = 12)),
+          plot.margin = margin(12, 16, 18, 28),
           panel.grid.minor = element_blank())
 }
 
@@ -227,12 +333,13 @@ plot_cusum_alarms_overview <- function(df,
                                        x_var     = "time_index",
                                        unit_var  = "analysis_unit_id",
                                        alarm_var = "alarm",
-                                       compact   = FALSE) {
+                                       compact   = FALSE,
+                                       base_size = 18) {
 
-  # Clean unit labels to show only the last segment (e.g. "Ambato").
+  # Clean unit labels using the selected hierarchy level. If two units share
+  # the same displayed name, include the parent level to disambiguate them.
   label_width <- if (isTRUE(compact)) 18 else 35
-  df <- df %>%
-    dplyr::mutate(clean_label = clean_unit_label(!!rlang::sym(unit_var), max_width = label_width))
+  df$clean_label <- make_heatmap_location_labels(df, unit_var = unit_var, max_width = label_width)
 
   x_sym     <- rlang::sym(x_var)
   unit_sym  <- rlang::sym("clean_label")
@@ -252,13 +359,13 @@ plot_cusum_alarms_overview <- function(df,
       title = "Outbreak Heatmap",
       subtitle = "Alerts are early warnings and require epidemiological review."
     ) +
-    theme_minimal(base_size = if (isTRUE(compact)) 13 else 18) +
+    theme_minimal(base_size = if (isTRUE(compact)) max(13, base_size - 5) else base_size) +
     theme(
       axis.text.x = element_text(angle = 0),
       axis.text.y = if (isTRUE(compact)) element_blank() else element_text(),
       axis.ticks.y = if (isTRUE(compact)) element_blank() else element_line(),
       plot.title = element_text(face = "bold"),
-      plot.subtitle = element_text(size = if (isTRUE(compact)) 9 else 12, color = "gray30"),
+      plot.subtitle = element_text(size = if (isTRUE(compact)) max(9, base_size * 0.55) else base_size * 0.72, color = "gray30"),
       legend.position = "bottom",
       panel.grid = element_blank()
     )

@@ -24,7 +24,7 @@ library(here)
 source("R/shared/config_helpers.R")
 
 # Load configuration before modules so shared helpers can use it.
-config_path <- here::here("config.json")
+config_path <- "config.json"
 config <- jsonlite::fromJSON(config_path)
 
 # App-level settings from config.json.

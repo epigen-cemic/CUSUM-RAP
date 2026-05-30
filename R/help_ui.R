@@ -9,7 +9,7 @@
 #'
 #' @return A Shiny `tagList` containing Help tab content.
 #' @keywords internal
-cusum_help_tab <- function() {
+cusum_help_tab <- function(ns = identity) {
   tagList(
     div(
       class = "help-card",
@@ -20,10 +20,38 @@ cusum_help_tab <- function() {
         "it is only needed if a future population-adjusted expected-frequency model is used."
       ),
       tags$ul(
-        tags$li(tags$a(href = "docs/HELP_EN.md", target = "_blank", "Open CUSUM help — English")),
-        tags$li(tags$a(href = "docs/HELP_ES.md", target = "_blank", "Abrir ayuda CUSUM — Español")),
-        tags$li(tags$a(href = "docs/User_Manual.pdf", target = "_blank", "Open user manual"))
+        tags$li(tags$a(href = "docs/User_Manual.pdf", target = "_blank", "Open user manual")),
+#        tags$li(tags$a(href = "docs/Developer_Guide_EN.pdf", target = "_blank", "Dev guide — English")),
+#        tags$li(tags$a(href = "docs/Developer_Guide_ES.pdf", target = "_blank", "Guía de desarrollo — Español"))
       )
+    ),
+
+    div(
+      class = "help-card",
+      h3("Display settings"),
+      p("Use this setting to increase the interface and plot text size. Larger options also increase plot height so the plotting area does not become compressed."),
+      tags$label(class = "control-label", "Display Font Size"),
+      selectInput(
+        ns("font_size"),
+        label = NULL,
+        choices = c(
+          "Small (current)" = "small",
+          "Medium" = "medium",
+          "Large" = "large",
+          "Extra large" = "xlarge"
+        ),
+        selected = "small",
+        width = "280px"
+      ),
+      tags$label(class = "control-label", "Decimal places shown in result tables"),
+      selectInput(
+        ns("display_digits"),
+        label = NULL,
+        choices = setNames(as.character(0:8), as.character(0:8)),
+        selected = "4",
+        width = "180px"
+      ),
+      p(class = "help-note", "This only changes how numbers are displayed in the app. Downloaded CSV files keep the full numeric values.")
     ),
 
     div(
