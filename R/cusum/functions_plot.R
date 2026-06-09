@@ -5,11 +5,13 @@
 
 # Brand colours used in CUSUM plots. Keep these aligned with www/config.css.
 cusum_plot_colours <- list(
-  neutral = "#E5E2DC",
-  alarm   = "#A94442",
-  accent  = "#F69342",
-  blue    = "#48563F",
-  dark    = "#1E2A15"
+  neutral   = "#E5E2DC",
+  no_alarm  = "#B8C7A8",
+  alarm     = "#B4443F",
+  baseline  = "#000000",
+  accent    = "#F69342",
+  blue      = "#48563F",
+  dark      = "#1E2A15"
 )
 
 clean_unit_label <- function(x, max_width = NULL) {
@@ -349,15 +351,33 @@ plot_cusum_alarms_overview <- function(df,
 
   p <- ggplot(df, aes(x = !!x_sym, y = !!unit_sym, fill = !!alarm_sym)) +
     geom_tile(color = "white", linewidth = 0.2) +
-    scale_fill_manual(values = c("FALSE" = cusum_plot_colours$neutral,
-                                 "TRUE"  = cusum_plot_colours$alarm)) +
+    scale_fill_manual(
+      values = c(
+        "FALSE" = "#B8C7A8",
+        "TRUE" = cusum_plot_colours$alarm
+      ),
+      labels = c(
+        "FALSE" = "No alarm detected",
+        "TRUE" = "Alarm detected"
+      ),
+      name = "CUSUM status"
+    ) +
+    guides(
+      fill = guide_legend(
+        title.position = "top",
+        title.hjust = 0.5,
+        nrow = 1,
+        byrow = TRUE,
+        keywidth = grid::unit(0.8, "cm"),
+        keyheight = grid::unit(0.45, "cm")
+      )
+    ) +
     scale_x_continuous(breaks = my_breaks, labels = function(b) smart_labs(b, df)) +
     labs(
       x = "Timeline\n(Week / Year)",
       y = if (isTRUE(compact)) NULL else "Location",
-      fill = "Alarm",
       title = "Outbreak Heatmap",
-      subtitle = "Alerts are early warnings and require epidemiological review."
+      subtitle = "Red cells show weeks where the CUSUM threshold was exceeded. Green/grey cells show weeks with no alarm detected."
     ) +
     theme_minimal(base_size = if (isTRUE(compact)) max(13, base_size - 5) else base_size) +
     theme(
@@ -365,10 +385,17 @@ plot_cusum_alarms_overview <- function(df,
       axis.text.y = if (isTRUE(compact)) element_blank() else element_text(),
       axis.ticks.y = if (isTRUE(compact)) element_blank() else element_line(),
       plot.title = element_text(face = "bold"),
-      plot.subtitle = element_text(size = if (isTRUE(compact)) max(9, base_size * 0.55) else base_size * 0.72, color = "gray30"),
+      plot.subtitle = element_text(
+        size = if (isTRUE(compact)) max(11, base_size * 0.70) else base_size * 0.80,
+        color = "gray30"
+      ),
       legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.title = element_text(size = max(11, base_size * 0.75)),
+      legend.text = element_text(size = max(10, base_size * 0.70)),
+      legend.key.size = grid::unit(max(0.45, base_size / 28), "cm"),
       panel.grid = element_blank()
     )
-
+  
   p
 }

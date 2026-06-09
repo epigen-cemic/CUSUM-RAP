@@ -129,12 +129,20 @@ cusumUI <- function(id) {
                                     )
                            ),
                            tabPanel("Analysis Results", 
-                                     br(),
-                                     shinyjs::disabled(
-                                       downloadButton(ns("download_data"), "Download Results CSV", class = "btn-info")
-                                     ),
-                                     br(), br(),
-                                     DT::DTOutput(ns("table_preview"))
+                                    br(),
+                                    shinyjs::disabled(
+                                      downloadButton(ns("download_data"), "Download Results CSV", class = "btn-info")
+                                      ),
+                                    br(), br(),
+                                    tags$h4("Unit-level reference"),
+                                    tags$p(class = "prepared-note", "Expected weekly cases and expected rates are shown once per analysis unit."),
+                                    uiOutput(ns("reference_table_filter_ui")),
+                                    DT::DTOutput(ns("table_reference")),
+                                    br(),
+                                    
+                                    tags$h4("Weekly results"),
+                                    uiOutput(ns("weekly_table_filter_ui")),
+                                    DT::DTOutput(ns("table_preview"))
                             ),
                            tabPanel("Prepared Data",
                                     div(class = "prepared-panel",

@@ -165,3 +165,35 @@ get_phase1_baseline <- function(df, window_size) {
   
   return(calculated_mu)
 }
+
+#' @title Calculate Phase 1 Training Baseline by Analysis Unit
+#'
+#' @description
+#' Calculates the automatic expected weekly baseline separately for each
+#' analysis unit. This avoids pooling different locations into one baseline
+#' when several locations are selected at the same time.
+#'
+#' @param df Data frame containing `unit_var`, `time_index`, and `n_cases`.
+#' @param window_size Numeric. Total number of weeks selected for analysis.
+#' @param unit_var Character. Column identifying the analysis unit.
+#'
+#' @return Named numeric vector. Names are analysis-unit IDs and values are
+#' expected weekly counts for each unit.
+#' @export
+get_phase1_baseline_by_unit <- function(df, window_size, unit_var = "analysis_unit_id") {
+  if (!unit_var %in% names(df)) {
+    stop("unit_var not found in data: ", unit_var)
+  }
+
+  units <- sort(unique(as.character(df[[unit_var]])))
+  values <- vapply(
+    units,
+    function(unit_id) {
+      unit_df <- df[as.character(df[[unit_var]]) == unit_id, , drop = FALSE]
+      get_phase1_baseline(unit_df, window_size)
+    },
+    numeric(1)
+  )
+
+  values
+}

@@ -26,7 +26,8 @@ cusum_server_inputs <- function(state) {
               return(NULL)
             }
 
-            mu_val <- get_phase1_baseline(prepared_df, as.numeric(input$param_weeks))
+            unit_mu <- get_phase1_baseline_by_unit(prepared_df, as.numeric(input$param_weeks))
+            mu_val <- mean(unit_mu, na.rm = TRUE)
           }
           k_val <- calculate_k_from_rr(input$param_rr, mu_val)
           return(k_val)

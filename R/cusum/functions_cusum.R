@@ -78,6 +78,43 @@ cusum_core <- function(y, mu,
 }
 
 
+#' Resolve a scalar or named unit-level parameter for one CUSUM unit.
+#'
+#' @param value Numeric scalar or named numeric vector.
+#' @param df_unit Data frame for one analysis unit.
+#' @param unit_var Character. Analysis-unit identifier column.
+#'
+#' @return Numeric scalar.
+#' @keywords internal
+#' Resolve a scalar or named unit-level parameter for one CUSUM unit.
+#'
+#' @param value Numeric scalar or named numeric vector.
+#' @param unit_id Analysis-unit identifier value.
+#'
+#' @return Numeric scalar.
+#' @keywords internal
+resolve_unit_parameter <- function(value, unit_id = NULL) {
+  if (is.null(value)) {
+    return(NULL)
+  }
+  
+  value_names <- names(value)
+  value <- as.numeric(value) |> stats::setNames(value_names)
+  
+  if (length(value) == 1 || is.null(names(value)) || all(names(value) == "")) {
+    return(as.numeric(value[1]))
+  }
+  
+  unit_id <- as.character(unit_id)
+  
+  if (!unit_id %in% names(value)) {
+    stop("No unit-level parameter value was found for analysis unit: ", unit_id)
+  }
+  
+  as.numeric(value[[unit_id]])
+}
+
+
 #' @title Run CUSUM for a Single Analysis Unit
 #'
 #' @description
@@ -133,7 +170,14 @@ run_cusum_for_unit <- function(df_unit,
   
   # Manual vs Automatic Baseline Logic
   if (!is.null(fixed_mu)) {
-    mu_hat <- rep(as.numeric(fixed_mu), length(y))
+    unit_id <- if ("analysis_unit_id" %in% names(df_unit)) {
+      as.character(df_unit$analysis_unit_id[[1]])
+    } else {
+      NULL
+    }
+    
+    unit_mu <- resolve_unit_parameter(fixed_mu, unit_id = unit_id)
+    mu_hat <- rep(unit_mu, length(y))
   } else {
     if (!any(idx_base)) stop("baseline_filter selects no rows for this unit (and no fixed_mu provided).")
     fit <- glm(y ~ t, family = poisson(), subset = idx_base)
@@ -143,10 +187,18 @@ run_cusum_for_unit <- function(df_unit,
   if (!any(idx_det))  stop("detect_filter selects no rows for this unit.")
   
   # Pass k and h explicitly
+  unit_id <- if ("analysis_unit_id" %in% names(df_unit)) {
+    as.character(df_unit$analysis_unit_id[[1]])
+  } else {
+    NULL
+  }
+  
+  unit_k <- resolve_unit_parameter(k, unit_id = unit_id)
+
   res <- cusum_core(
     y   = y[idx_det],
     mu  = mu_hat[idx_det],
-    k   = k,
+    k   = unit_k,
     h   = h,
     trans = trans,
     reset = reset
@@ -191,30 +243,151 @@ run_cusum_for_unit <- function(df_unit,
 #' @importFrom rlang sym
 #' @export
 run_cusum_all_units <- function(df,
-                                unit_var        = "analysis_unit_id",
+                                unit_var = "analysis_unit_id",
                                 baseline_filter,
                                 detect_filter,
-                                k,       # Mandatory
-                                h,       # Mandatory
-                                trans  = "standard",
-                                reset  = FALSE,
+                                k,
+                                h,
+                                trans = "standard",
+                                reset = FALSE,
                                 fixed_mu = NULL) {
   
-  unit_sym <- rlang::sym(unit_var)
-  
   df %>%
-    dplyr::group_by(!!unit_sym) %>%
-    dplyr::group_modify(
-      ~ run_cusum_for_unit(
-        df_unit         = .x,
+    dplyr::group_by(.data[[unit_var]]) %>%
+    dplyr::group_modify(function(.x, .y) {
+      unit_id <- as.character(.y[[unit_var]][[1]])
+      
+      .x[[unit_var]] <- unit_id
+      
+      result <- run_cusum_for_unit(
+        df_unit = .x,
         baseline_filter = baseline_filter,
-        detect_filter   = detect_filter,
-        k      = k,
-        h      = h,
-        trans  = trans,
-        reset  = reset,
-        fixed_mu = fixed_mu
+        detect_filter = detect_filter,
+        k = resolve_unit_parameter(k, unit_id = unit_id),
+        h = h,
+        trans = trans,
+        reset = reset,
+        fixed_mu = if (!is.null(fixed_mu)) {
+          resolve_unit_parameter(fixed_mu, unit_id = unit_id)
+        } else {
+          NULL
+        }
       )
-    ) %>%
+      
+      dplyr::select(result, -dplyr::any_of(unit_var))
+    }) %>%
     dplyr::ungroup()
+}
+#' @title Format CUSUM Weekly Results for User-Facing Tables
+#'
+#' @description
+#' Converts internal CUSUM result columns into clearer output labels. The
+#' internal `mu_hat` value is shown as expected weekly cases and, when
+#' population is available, as expected rate per 100,000 people.
+#'
+#' @param df Data frame returned by `run_cusum_all_units()`.
+#'
+#' @return Data frame with user-facing columns.
+#' @export
+format_cusum_weekly_table <- function(df) {
+  if (is.null(df) || nrow(df) == 0) {
+    return(df)
+  }
+
+  out <- df
+
+  if ("epi_date" %in% names(out)) {
+    out$epi_date <- format(as.Date(out$epi_date), "%G-W%V")
+  }
+
+  if (all(c("n_cases", "population") %in% names(out))) {
+    out$observed_rate_per_100k <- ifelse(
+      !is.na(out$population) & out$population > 0,
+      (out$n_cases / out$population) * 100000,
+      NA_real_
+    )
+  }
+
+  if (all(c("mu_hat", "population") %in% names(out))) {
+    out$expected_rate_per_100k <- ifelse(
+      !is.na(out$population) & out$population > 0,
+      (out$mu_hat / out$population) * 100000,
+      NA_real_
+    )
+  }
+
+  cols <- c(
+    intersect(c("country", "level1", "level2", "level3", "level4"), names(out)),
+    intersect(c("analysis_unit_id", "year", "week", "epi_date"), names(out)),
+    intersect(c("n_cases", "mu_hat", "population", "observed_rate_per_100k", "expected_rate_per_100k", "cusum", "alarm", "z", "k_value"), names(out))
+  )
+
+  out <- out[, unique(cols), drop = FALSE]
+
+  names(out) <- dplyr::recode(
+    names(out),
+    analysis_unit_id = "Analysis unit",
+    year = "Year",
+    week = "Week",
+    epi_date = "Epi week",
+    n_cases = "Observed cases",
+    mu_hat = "Expected weekly cases (mu)",
+    population = "Population",
+    observed_rate_per_100k = "Observed Rate",
+    expected_rate_per_100k = "Expected Rate",
+    cusum = "CUSUM score",
+    alarm = "Alarm",
+    z = "Standardized residual",
+    k_value = "reference value k"
+  )
+
+  out
+}
+
+
+#' @title Format Unit-Level CUSUM Reference Table
+#'
+#' @description
+#' Creates one reference row per analysis unit, avoiding repeated baseline
+#' values in the main interpretation table.
+#'
+#' @param df Data frame returned by `run_cusum_all_units()`.
+#'
+#' @return Data frame with one row per analysis unit.
+#' @export
+format_cusum_reference_table <- function(df) {
+  if (is.null(df) || nrow(df) == 0 || !"analysis_unit_id" %in% names(df)) {
+    return(data.frame())
+  }
+
+  geo_cols <- intersect(c("country", "level1", "level2", "level3", "level4"), names(df))
+
+  ref <- df %>%
+    dplyr::group_by(.data$analysis_unit_id) %>%
+    dplyr::summarise(
+      dplyr::across(dplyr::all_of(geo_cols), ~ dplyr::first(.x)),
+      expected_weekly_cases = dplyr::first(.data$mu_hat),
+      population = if ("population" %in% names(df)) mean(.data$population, na.rm = TRUE) else NA_real_,
+      expected_rate_per_100k = if ("population" %in% names(df)) {
+        pop <- mean(.data$population, na.rm = TRUE)
+        ifelse(!is.na(pop) && pop > 0, (dplyr::first(.data$mu_hat) / pop) * 100000, NA_real_)
+      } else {
+        NA_real_
+      },
+      k_reference_value = if ("k_value" %in% names(df)) dplyr::first(.data$k_value) else NA_real_,
+      alarm_weeks = sum(.data$alarm, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  names(ref) <- dplyr::recode(
+    names(ref),
+    analysis_unit_id = "Analysis unit",
+    expected_weekly_cases = "Expected weekly cases",
+    population = "Population",
+    expected_rate_per_100k = "Expected Rate",
+    k_reference_value = "reference value k",
+    alarm_weeks = "Alarm weeks"
+  )
+
+  ref
 }

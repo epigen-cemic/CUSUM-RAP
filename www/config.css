@@ -271,7 +271,7 @@ body {
 }
 
 /* ==========================================
-   6. BUTTONS (Updated)
+   6. BUTTONS
    ========================================== */
 .btn-default {
   background-color: #f8f9fa;
@@ -407,7 +407,6 @@ body {
   gap: 20px;
 }
 
-/* Reviewer feedback polish */
 .output-description {
   font-size: 13px;
   color: #666666;
@@ -933,4 +932,52 @@ body.font-size-xlarge .detail-location-selectors .selectize-input {
 .selectize-dropdown .selectize-dropdown-content {
   max-height: 260px !important;
   overflow-y: auto !important;
+}
+
+/* ==========================================
+   TABLES 
+   ========================================== */
+
+.table-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 10px 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: #000000;
+}
+
+.table-filter-bar .form-group {
+  margin-bottom: 0;
+}
+
+.table-filter-inline-label {
+  margin: 0;
+  color: #000000 !important;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 34px;
+}
+
+.table-filter-bar label {
+  color: #000000 !important;
+}
+
+.table-filter-bar .selectize-control,
+.table-filter-bar .form-control {
+  margin-bottom: 0;
+}
+
+.table-filter-values {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-filter-separator {
+  color: #000000;
+  font-weight: 600;
 }
