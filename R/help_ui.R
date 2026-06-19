@@ -20,9 +20,8 @@ cusum_help_tab <- function(ns = identity) {
         "it is only needed if a future population-adjusted expected-frequency model is used."
       ),
       tags$ul(
-        tags$li(tags$a(href = "docs/User_Manual.pdf", target = "_blank", "Open user manual")),
-#        tags$li(tags$a(href = "docs/Developer_Guide_EN.pdf", target = "_blank", "Dev guide — English")),
-#        tags$li(tags$a(href = "docs/Developer_Guide_ES.pdf", target = "_blank", "Guía de desarrollo — Español"))
+        tags$li(tags$a(href = "docs/User_Manual_EN.pdf", target = "_blank", "Open user manual")),
+        tags$li(tags$a(href = "docs/User_Manual_ES.pdf", target = "_blank", "Open spanish user manual"))
       )
     ),
 
