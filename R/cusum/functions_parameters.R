@@ -115,7 +115,79 @@ calculate_k_from_rr <- function(rr, mu0_mean) {
   return(k)
 }
 
-
+#' @title Convert Reference Rate to Expected Counts by Unit
+#'
+#' @description
+#' Converts a weekly reference rate per 100,000 people into the expected raw
+#' weekly case count required by the CUSUM engine for each analysis unit.
+#'
+#' @param df Data frame containing the analysis-unit and population columns.
+#' @param rate_per_100k Numeric. Expected weekly rate per 100,000 people.
+#' @param unit_var Character. Column identifying the analysis unit.
+#' @param population_var Character. Column containing population values.
+#'
+#' @return Named numeric vector containing the expected weekly count for each
+#'         analysis unit.
+#'
+#' @export
+calculate_mu0_from_rate_by_unit <- function(
+    df,
+    rate_per_100k,
+    unit_var = "analysis_unit_id",
+    population_var = "population") {
+  
+  required_cols <- c(unit_var, population_var)
+  missing_cols <- setdiff(required_cols, names(df))
+  
+  if (length(missing_cols) > 0) {
+    stop(
+      "Missing required column(s): ",
+      paste(missing_cols, collapse = ", ")
+    )
+  }
+  
+  if (length(rate_per_100k) != 1 ||
+      is.na(rate_per_100k) ||
+      !is.finite(rate_per_100k) ||
+      rate_per_100k <= 0) {
+    stop("rate_per_100k must be a single positive number.")
+  }
+  
+  unit_ids <- as.character(df[[unit_var]])
+  populations <- suppressWarnings(as.numeric(df[[population_var]]))
+  
+  units <- sort(unique(
+    unit_ids[!is.na(unit_ids) & nzchar(unit_ids)]
+  ))
+  
+  if (length(units) == 0) {
+    stop("No valid analysis units were found.")
+  }
+  
+  expected_counts <- vapply(
+    units,
+    function(unit_id) {
+      unit_rows <- !is.na(unit_ids) & unit_ids == unit_id
+      unit_population <- populations[unit_rows]
+      
+      unit_population <- unit_population[
+        is.finite(unit_population) & unit_population > 0
+      ]
+      
+      if (length(unit_population) == 0) {
+        stop(
+          "No valid positive population was found for analysis unit: ",
+          unit_id
+        )
+      }
+      
+      mean(unit_population) * rate_per_100k / 100000
+    },
+    numeric(1)
+  )
+  
+  expected_counts
+}
 
 #' @title Calculate Phase 1 Training Baseline
 #' 

@@ -14,7 +14,7 @@ The CUSUM RAP Tool applies a one-sided upper cumulative sum procedure to weekly 
 > **Interpretation.** A CUSUM alarm is an early-warning signal, not a diagnosis, causal conclusion, or confirmation of an outbreak. Review data quality, reporting changes, denominators, local context, and other surveillance evidence before acting.
 
 - The analysis is performed separately for every selected geographic unit.
-- The current workflow is count based. Population may be uploaded, but it is not required for the standard CUSUM calculation.
+- The CUSUM engine operates on counts. Population is required for manual mu0 because the entered weekly rate per 100,000 is converted to an expected count for each unit; it is optional for automatic mu0.
 - The detection period controls the recent weekly window used for analysis; prepared-data coverage rules may require a longer underlying history.
 
 
@@ -31,7 +31,7 @@ Upload one or more API-POP-compatible CSV files. Comma- and semicolon-delimited 
 | level2 | Depends on selected level | Second administrative level. | department, district, LAD, Level2 |
 | level3 / level4 | Depends on selected level | More detailed administrative levels. | fraction, MSOA, Level3 |
 | n_cases | Yes | Observed weekly cases or event count. | n_cases, cases, case_count, count, n |
-| population | Optional | Not required by the current count-based CUSUM. | population, pop, denominator |
+| population | Required for manual mu0 | Used to convert the manual weekly rate per 100,000 into an expected count for each unit. Optional for automatic mu0. | population, pop, denominator |
 
 ## Multiple uploaded files
 
@@ -63,7 +63,7 @@ When more than one file is active, the tool asks how to resolve duplicate locati
 | Locations | Limits CUSUM to the selected units. An empty selection includes all units available at the chosen level. |
 | Detection Period (Weeks) | UI range 4-260; default 52. The configured coverage validation currently requires at least the larger of this value and 52 prepared weeks. |
 | Automatic expected frequency | Fits an expected weekly count separately for each analysis unit using the current Poisson-model workflow. |
-| Manual expected frequency (mu0) | Uses the entered fixed expected weekly case count. Enter a count per unit per week, not a prevalence rate. |
+| Manual expected frequency (mu0) | Interprets the entered value as a weekly rate per 100,000 and converts it into an expected count for each unit using population. |
 | Target ARL0 | Desired average run length when the process is in control; used to display a recommended h. |
 | Relative Risk (RR) | Increase the CUSUM is intended to detect. It is used with the expected count to calculate k. |
 | Calculated k | Reference value shown by the app; it is calculated from RR and the expected count. |
@@ -136,7 +136,7 @@ On-screen table filters and decimal-place settings affect only the view. Downloa
 | Insufficient prepared weeks | Upload a longer weekly history or reduce the detection period, noting that the current configured minimum is 52 prepared weeks. |
 | Low observed coverage | Confirm whether absent weeks represent true zero cases. Upload a more complete series when they are missing reports. |
 | Unexpectedly large counts after combining files | Review the active files and the selected overlap method, especially Add Together (Sum). |
-| Automatic baseline appears implausible | Inspect the selected units and history, then compare with an appropriate manual expected weekly count. |
+| Automatic baseline appears implausible | Inspect the selected units and history, then compare with an appropriate manual weekly rate per 100,000. |
 
 > **Escalation package.** When reporting a problem, include the active file names, selected country and level, location selection, parameter values, the preparation log, and the exact error text. Do not send identifiable or restricted data through an unapproved channel.
 
@@ -145,7 +145,7 @@ On-screen table filters and decimal-place settings affect only the view. Downloa
 
 | Term | Meaning |
 | --- | --- |
-| mu0 / expected frequency | Expected weekly case count for an analysis unit. |
+| mu0 / expected frequency | Automatic mu0 is an expected weekly count. Manual mu0 is entered as a weekly rate per 100,000 and converted to a unit-specific count using population. |
 | k | Reference value that controls how strongly deviations contribute to the CUSUM. |
 | h | Decision threshold used to raise an alarm. |
 | ARL0 | Average run length expected under the no-change condition. |

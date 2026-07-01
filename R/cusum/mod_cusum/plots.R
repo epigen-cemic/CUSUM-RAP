@@ -40,7 +40,11 @@ cusum_server_plots <- function(state) {
 
           if (input$mu_method == "manual") {
             req(input$param_mu)
-            final_mu <- input$param_mu
+            
+            final_mu <- calculate_mu0_from_rate_by_unit(
+              df = prepared_df,
+              rate_per_100k = input$param_mu
+            )
           } else {
             final_mu <- get_phase1_baseline_by_unit(prepared_df, window_size)
           }

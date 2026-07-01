@@ -14,7 +14,7 @@ La herramienta CUSUM RAP aplica un procedimiento de suma acumulada unilateral su
 > **Interpretación.** Una alarma CUSUM es una señal de alerta temprana, no un diagnóstico, una conclusión causal ni la confirmación de un brote. Antes de actuar, revise la calidad de los datos, cambios de notificación, denominadores, contexto local y otras evidencias de vigilancia.
 
 - El análisis se realiza por separado para cada unidad geográfica seleccionada.
-- El flujo actual se basa en recuentos. La población puede estar presente, pero no es necesaria para el cálculo CUSUM estándar.
+- El motor CUSUM opera con recuentos. La población es obligatoria para mu0 manual porque la tasa semanal ingresada por 100.000 se convierte en un recuento esperado para cada unidad; es opcional para mu0 automático.
 - El período de detección controla la ventana semanal reciente; las reglas de cobertura pueden exigir un historial subyacente más largo.
 
 
@@ -31,7 +31,7 @@ Cargue uno o más archivos CSV compatibles con API-POP. Se admiten archivos deli
 | level2 | Según el nivel elegido | Segundo nivel administrativo. | department, district, LAD, Level2 |
 | level3 / level4 | Según el nivel elegido | Niveles administrativos más detallados. | fraction, MSOA, Level3 |
 | n_cases | Sí | Casos semanales observados o recuento de eventos. | n_cases, cases, case_count, count, n |
-| population | Opcional | No es necesaria para el CUSUM actual basado en recuentos. | population, pop, denominator |
+| population | Obligatoria para mu0 manual | Se usa para convertir la tasa semanal manual por 100.000 en un recuento esperado para cada unidad. Es opcional para mu0 automático. | population, pop, denominator |
 
 ## Varios archivos cargados
 
@@ -63,7 +63,7 @@ Cuando hay más de un archivo activo, la herramienta solicita cómo resolver reg
 | Locations | Limita CUSUM a las unidades elegidas. Sin selección se incluyen todas las unidades disponibles. |
 | Detection Period (Weeks) | Rango de interfaz 4-260; valor predeterminado 52. La validación actual exige al menos el mayor valor entre este período y 52 semanas preparadas. |
 | Frecuencia esperada automática | Calcula un recuento semanal esperado por separado para cada unidad mediante el flujo actual de modelo Poisson. |
-| Frecuencia esperada manual (mu0) | Usa un recuento semanal esperado fijo. Ingrese casos esperados por unidad y por semana, no una tasa de prevalencia. |
+| Frecuencia esperada manual (mu0) | Interpreta el valor ingresado como una tasa semanal por 100.000 y la convierte en un recuento esperado para cada unidad usando la población. |
 | Target ARL0 | Longitud media de corrida deseada bajo condición estable; se usa para mostrar un h recomendado. |
 | Relative Risk (RR) | Aumento que se desea detectar. Se usa con el valor esperado para calcular k. |
 | Calculated k | Valor de referencia calculado por la aplicación a partir de RR y el recuento esperado. |
@@ -136,7 +136,7 @@ Los filtros de tabla y los decimales afectan solo la visualización. Las descarg
 | Insufficient prepared weeks | Cargue un historial más largo o reduzca el período, considerando que el mínimo configurado actual es 52. |
 | Low observed coverage | Confirme si las semanas ausentes son ceros reales; cargue una serie más completa si son faltantes de notificación. |
 | Recuentos demasiado altos al combinar archivos | Revise archivos activos y el método de solapamiento, especialmente Add Together (Sum). |
-| Línea automática poco plausible | Revise unidades e historial y compare con un recuento esperado manual apropiado. |
+| Línea automática poco plausible | Revise unidades e historial y compare con una tasa semanal manual apropiada por 100.000. |
 
 > **Información para escalar.** Incluya nombres de archivos activos, país, nivel, ubicaciones, parámetros, registro de preparación y texto exacto del error. No envíe datos identificables o restringidos por canales no aprobados.
 
@@ -145,7 +145,7 @@ Los filtros de tabla y los decimales afectan solo la visualización. Las descarg
 
 | Término | Significado |
 | --- | --- |
-| mu0 / frecuencia esperada | Recuento semanal esperado para una unidad. |
+| mu0 / frecuencia esperada | El mu0 automático es un recuento semanal esperado. El mu0 manual se ingresa como tasa semanal por 100.000 y se convierte en un recuento por unidad usando la población. |
 | k | Valor de referencia que controla cuánto contribuyen las desviaciones. |
 | h | Umbral de decisión para generar una alarma. |
 | ARL0 | Longitud media de corrida esperada bajo ausencia de cambio. |

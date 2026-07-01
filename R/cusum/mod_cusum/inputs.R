@@ -11,7 +11,16 @@ cusum_server_inputs <- function(state) {
 
           if (input$mu_method == "manual") {
             req(input$param_mu)
-            mu_val <- input$param_mu
+            
+            prepared_df <- prepared_target_data()
+            req(prepared_df)
+            
+            unit_mu <- calculate_mu0_from_rate_by_unit(
+              df = prepared_df,
+              rate_per_100k = input$param_mu
+            )
+            
+            mu_val <- mean(unit_mu, na.rm = TRUE)
           } else {
             # Automatic method: needs a dataset to calculate baseline.
             prepared_df <- prepared_target_data()

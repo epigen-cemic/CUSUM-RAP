@@ -70,7 +70,7 @@ cusumUI <- function(id) {
                            condition = paste0("input['", ns("mu_method"), "'] == 'manual'"),
                            tags$label(class = "control-label", "Enter Reference frequency (\u03BC0):"),
                            tags$div(class = "input-overlay-wrapper",
-                                    numericInput(ns("param_mu"), label = NULL, value = 10, width = "100%"),
+                                    numericInput(ns("param_mu"), label = NULL, value = 10, min = 1, width = "100%"),
                                     tags$span("per 100.000", class = "input-overlay-text")
                            )
                          ),
