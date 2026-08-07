@@ -1,14 +1,42 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
+type: software
+title: "CUSUM-RAP: An early-warning tool for CUSUM-based outbreak detection in public health surveillance"
+abstract: "CUSUM-RAP is an R/Shiny tool for prospective outbreak detection using cumulative sum surveillance methods. It processes weekly epidemiological data by geographic unit, estimates expected frequencies using automatic or user-defined parameters, and generates early-warning outputs including alarm summaries, observed-versus-expected time series, CUSUM process plots, and downloadable analytical tables. The tool supports timely identification of unusual increases in reported cases and provides evidence for local epidemiological review and public health response."
 authors:
-- family-names: "YOUR_NAME_HERE"
-  given-names: "YOUR_NAME_HERE"
-  orcid: "https://orcid.org/0000-0000-0000-0000"
-- family-names: "Lisa"
-  given-names: "Mona"
-  orcid: "https://orcid.org/0000-0000-0000-0000"
-title: "CUSUM-RAP"
+  - family-names: "Giordano"
+    given-names: "M. E."
+    affiliation: "Laboratorio de Epidemiología Genética, Centro de Educación Médica e Investigaciones Clínicas \"Norberto Quirno\" (UE CEMIC-CONICET)"
+  - family-names: "Gili"
+    given-names: "J. A."
+    affiliation: "Laboratorio de Epidemiología Genética, Centro de Educación Médica e Investigaciones Clínicas \"Norberto Quirno\" (UE CEMIC-CONICET)"
+  - family-names: "López-Camelo"
+    given-names: "J. S."
+    affiliation: "Laboratorio de Epidemiología Genética, Centro de Educación Médica e Investigaciones Clínicas \"Norberto Quirno\" (UE CEMIC-CONICET)"
+  - family-names: "Poletta"
+    given-names: "F. A."
+    email: "fpoletta@cemic.edu.ar"
+    affiliation: "Laboratorio de Epidemiología Genética, Centro de Educación Médica e Investigaciones Clínicas \"Norberto Quirno\" (UE CEMIC-CONICET)"
+contact:
+  - family-names: "Poletta"
+    given-names: "F. A."
+    email: "fpoletta@cemic.edu.ar"
+    affiliation: "Laboratorio de Epidemiología Genética, Centro de Educación Médica e Investigaciones Clínicas \"Norberto Quirno\" (UE CEMIC-CONICET)"
 version: 1.0.0
-doi: 10.5281/zenodo.1234
 date-released: 2026-06-12
+# doi: "10.5281/zenodo.1234567"  # DOI: reemplazar con el DOI real al hacer el release
+license: MIT
 url: "https://github.com/epigen-cemic/CUSUM-RAP"
+keywords:
+  - "public health surveillance"
+  - "outbreak detection"
+  - "CUSUM"
+  - "early warning"
+  - "R Shiny"
+  - "epidemiology"
+references:
+  - type: grant
+    title: "Analysis for Action (formerly the Pandemic Preparedness Toolkit)"
+    institution:
+      name: "UK Office for National Statistics (ONS)"
+    notes: "CUSUM-RAP was developed at CEMIC, the Argentina Delivery Partner for Analysis for Action. This work was supported by Wellcome (Grant number 226596/Z/22/Z)."
