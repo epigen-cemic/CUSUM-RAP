@@ -20,8 +20,7 @@ cusum_help_tab <- function(ns = identity) {
         "it is only needed if a future population-adjusted expected-frequency model is used."
       ),
       tags$ul(
-        tags$li(tags$a(href = "docs/User_Manual_EN.pdf", target = "_blank", "Open user manual")),
-        tags$li(tags$a(href = "docs/User_Manual_ES.pdf", target = "_blank", "Open spanish user manual"))
+        tags$li(tags$a(href = "docs/2.3.3 Geospatial Analysis - 1.3. CUSUM RAP User Manual.docx", download ="2.3.3 Geospatial Analysis - 1.3. CUSUM RAP User Manual.docx" ,target = "_self", "Download user manual"))
       )
     ),
 
