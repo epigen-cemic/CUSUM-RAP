@@ -1,4 +1,4 @@
-cff-version: 1.2.0
+cff-version: 1.5.5
 message: "If you use this software, please cite it as below."
 type: software
 title: "CUSUM-RAP: An early-warning tool for CUSUM-based outbreak detection in public health surveillance"
@@ -24,7 +24,7 @@ contact:
     orcid: "https://orcid.org/0000-0002-6102-8416"
     email: "fpoletta@cemic.edu.ar"
     affiliation: "Laboratorio de Epidemiología Genética, Centro de Educación Médica e Investigaciones Clínicas \"Norberto Quirno\" (UE CEMIC-CONICET)"
-version: 1.0.0
+version: 1.5.5
 date-released: 2026-06-12
 # doi:
 license: MIT
