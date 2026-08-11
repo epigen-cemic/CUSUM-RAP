@@ -26,7 +26,7 @@ contact:
     affiliation: "Laboratorio de Epidemiología Genética, Centro de Educación Médica e Investigaciones Clínicas \"Norberto Quirno\" (UE CEMIC-CONICET)"
 version: 1.5.5
 date-released: 2026-06-12
-# doi:
+doi: 10.5281/zenodo.21893968
 license: MIT
 url: "https://github.com/epigen-cemic/CUSUM-RAP"
 keywords:
