@@ -224,7 +224,7 @@ If you use CUSUM-RAP in research, publications, or other work, please cite the s
 Giordano, M. E., Gili, J. A., López-Camelo, J. S.& Poletta, F. A. (2026). CUSUM-RAP: An early-warning tool for CUSUM-based outbreak detection in public health surveillance (Version v1.5.5) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.21893968 
 
 **CUSUM-RAP v1.5.5**  
-https://doi.org/10.5281/zenodo.21893512
+https://doi.org/10.5281/zenodo.21893968
 
 Citation metadata are also available in the `CITATION.cff` file.
 
