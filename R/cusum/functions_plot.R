@@ -1,6 +1,6 @@
 ## -----------------------------------------------------------
 ## functions_plot.R
-## Plotting functions for CUSUM with Smart X-Axis and Clean IDs
+## Plotting functions for CUSUM with calendar-month X-Axis and Clean IDs
 ## -----------------------------------------------------------
 
 # Brand colours used in CUSUM plots. Keep these aligned with www/config.css.
@@ -82,7 +82,12 @@ add_prevalence_plot_columns <- function(df_unit,
     df_unit$.plot_expected <- df_unit[[mu_var]]
     attr(df_unit, "plot_y_label") <- "Case count"
     attr(df_unit, "plot_subtitle") <- "Observed weekly counts compared with the expected baseline."
-    attr(df_unit, "plot_caption") <- "Black line = expected baseline frequency.\nRed points = weeks with CUSUM alarms. Population data were not available, so this plot shows case counts instead of prevalence."
+    attr(df_unit, "plot_caption") <- paste(
+      "Black: expected baseline. Red: CUSUM-alarm weeks.",
+      "Population data unavailable.",
+      "Values shown as case counts, not prevalence.",
+      sep = "\n"
+    )
     return(df_unit)
   }
 
@@ -93,7 +98,11 @@ add_prevalence_plot_columns <- function(df_unit,
   df_unit$.plot_expected <- (df_unit[[mu_var]] / population) * 100000
   attr(df_unit, "plot_y_label") <- "Prevalence"
   attr(df_unit, "plot_subtitle") <- "Observed weekly values compared with the expected baseline per 100,000 people."
-  attr(df_unit, "plot_caption") <- "Black line = expected baseline prevalence.\nRed points = weeks with CUSUM alarms."
+  attr(df_unit, "plot_caption") <- paste(
+    "Black: expected baseline. Red: CUSUM-alarm weeks.",
+    "Values shown per 100,000 people.",
+    sep = "\n"
+  )
   df_unit
 }
 
@@ -174,13 +183,135 @@ get_smart_breaks <- function(df, x_var = "time_index") {
   return(sort(unique(breaks)))
 }
 
+#' @title Calendar-Month X-Axis for Epidemiological Timelines
+#'
+#' @description
+#' Creates x-axis breaks at the first available epidemiological week in each
+#' calendar month. The axis remains legible for longer analysis periods by
+#' showing every month through 18 months, every second month through 36 months,
+#' and calendar quarters thereafter. The first visible label in each calendar
+#' year includes the year on a second line. A January label directly following
+#' a December label is skipped so the two year labels cannot overlap.
+#'
+#' @param df Data frame containing the continuous x variable and `epi_date`.
+#' @param x_var Character string. The continuous x-axis column.
+#' @param date_var Character string. The epidemiological-week date column.
+#'
+#' @return A list with `breaks` and matching `labels` for
+#'   \code{scale_x_continuous()}.
+#' @keywords internal
+#' @noRd
+get_calendar_month_axis <- function(df,
+                                    x_var = "time_index",
+                                    date_var = "epi_date") {
+  # Older result objects may not include epi_date. Keep the previous week-axis
+  # behavior as a safe fallback rather than producing an unlabeled chart.
+  if (!all(c(x_var, date_var) %in% names(df))) {
+    breaks <- get_smart_breaks(df, x_var)
+    return(list(breaks = breaks, labels = smart_labs(breaks, df)))
+  }
+
+  dates <- df[[date_var]]
+  if (!inherits(dates, "Date")) {
+    dates <- as.Date(dates)
+  }
+
+  timeline <- data.frame(
+    x = suppressWarnings(as.numeric(df[[x_var]])),
+    date = dates
+  )
+  timeline <- timeline[is.finite(timeline$x) & !is.na(timeline$date), , drop = FALSE]
+
+  if (nrow(timeline) == 0) {
+    breaks <- get_smart_breaks(df, x_var)
+    return(list(breaks = breaks, labels = smart_labs(breaks, df)))
+  }
+
+  # Results contain one row per location and week, so reduce the timeline to
+  # one representative date for each shared time index before finding months.
+  timeline <- timeline[order(timeline$x), , drop = FALSE]
+  timeline <- timeline[!duplicated(timeline$x), , drop = FALSE]
+  timeline$month <- format(timeline$date, "%Y-%m")
+  monthly <- timeline[!duplicated(timeline$month), , drop = FALSE]
+
+  n_months <- nrow(monthly)
+  month_step <- if (n_months <= 18) {
+    1L
+  } else if (n_months <= 36) {
+    2L
+  } else {
+    3L
+  }
+
+  keep <- seq.int(1L, n_months, by = month_step)
+  monthly <- monthly[keep, , drop = FALSE]
+
+  # Do not force a January label immediately after December. The next
+  # scheduled label (for example, February) will show the new year instead.
+  years <- format(monthly$date, "%Y")
+  months <- as.integer(format(monthly$date, "%m"))
+  previous_years <- c(NA_character_, head(years, -1L))
+  previous_months <- c(NA_integer_, head(months, -1L))
+  skip_january <- !is.na(previous_years) &
+    months == 1L &
+    previous_months == 12L &
+    years != previous_years
+  monthly <- monthly[!skip_january, , drop = FALSE]
+
+  years <- format(monthly$date, "%Y")
+  show_year <- c(TRUE, years[-1L] != years[-length(years)])
+  labels <- ifelse(
+    show_year,
+    format(monthly$date, "%b\n%Y"),
+    format(monthly$date, "%b")
+  )
+
+  list(breaks = monthly$x, labels = labels)
+}
+
+#' @title Weekly Minor Ticks for Epidemiological Timelines
+#'
+#' @description
+#' Returns one unlabeled x-axis tick for every available epidemiological week.
+#' Month or quarter labels remain the major axis labels.
+#'
+#' @param df Data frame containing the continuous x variable.
+#' @param x_var Character string. The continuous x-axis column.
+#'
+#' @return A numeric vector of weekly x-axis tick positions.
+#' @keywords internal
+#' @noRd
+get_weekly_axis_ticks <- function(df, x_var = "time_index") {
+  weeks <- sort(unique(suppressWarnings(as.numeric(df[[x_var]]))))
+  weeks[is.finite(weeks)]
+}
+
+#' @title Axis Guide With Weekly Minor Ticks
+#'
+#' @description
+#' Uses ggplot2's native minor-tick support when it is available. This keeps
+#' the weekly marks below the axis rather than drawing vertical lines through
+#' the chart area.
+#'
+#' @return A ggplot2 axis guide.
+#' @keywords internal
+#' @noRd
+weekly_axis_guide <- function() {
+  if ("minor.ticks" %in% names(formals(ggplot2::guide_axis))) {
+    ggplot2::guide_axis(minor.ticks = TRUE)
+  } else {
+    ggplot2::waiver()
+  }
+}
+
 
 #' @title Plot Observed vs Expected Counts for a Single Unit
 #'
 #' @description
 #' Creates a combined plot for a single analysis unit showing observed weekly 
 #' counts as bars, the expected baseline as a line, and alarm points. 
-#' Uses smart X-axis breaks and vertical year labels.
+#' Uses calendar-month X-axis breaks, year labels when the displayed calendar
+#' year changes, and unlabeled weekly tick marks.
 #'
 #' @param df_unit Data frame containing data for a single analysis unit.
 #' @param unit_label Character (optional). The analysis_unit_id (cleans pipes automatically).
@@ -205,8 +336,8 @@ plot_cusum_series_unit <- function(df_unit,
   
   x_sym <- rlang::sym(x_var)
   
-  # Calculate dynamic breaks
-  my_breaks <- get_smart_breaks(df_unit, x_var)
+  month_axis <- get_calendar_month_axis(df_unit, x_var)
+  weekly_ticks <- setdiff(get_weekly_axis_ticks(df_unit, x_var), month_axis$breaks)
   
   ggplot(df_unit, aes(x = !!x_sym)) +
     geom_col(aes(y = .plot_observed), fill = cusum_plot_colours$blue, alpha = 0.45) +
@@ -215,9 +346,14 @@ plot_cusum_series_unit <- function(df_unit,
       data = df_unit[df_unit[[alarm_var]] == TRUE, ],
       aes(y = .plot_observed), size = 4, color = cusum_plot_colours$alarm
     ) +
-    scale_x_continuous(breaks = my_breaks, labels = function(b) smart_labs(b, df_unit)) +
+    scale_x_continuous(
+      breaks = month_axis$breaks,
+      labels = month_axis$labels,
+      minor_breaks = weekly_ticks,
+      guide = weekly_axis_guide()
+    ) +
     labs(
-      x = "Timeline\n(Week / Year)",
+      x = "Timeline\n(Month / Year)",
       y = attr(df_unit, "plot_y_label"),
       title = paste("Unit:", clean_title),
       subtitle = attr(df_unit, "plot_subtitle"),
@@ -230,6 +366,7 @@ plot_cusum_series_unit <- function(df_unit,
           plot.caption = element_text(size = base_size * 0.70, hjust = 0, lineheight = 1.10, margin = margin(t = 8)),
           axis.title.x = element_text(margin = margin(t = 8)),
           axis.title.y = element_text(margin = margin(r = 12)),
+          axis.ticks.length = grid::unit(0.15, "cm"),
           plot.margin = margin(12, 16, 18, 18),
           panel.grid.minor = element_blank())
 }
@@ -238,7 +375,7 @@ plot_cusum_series_unit <- function(df_unit,
 #'
 #' @description
 #' Visualizes the CUSUM statistic over time. Includes a red dashed 
-#' threshold line, red dots for ALL alarms, and smart X-axis labels.
+#' threshold line, red dots for ALL alarms, and calendar-month X-axis labels.
 #'
 #' @param df_unit Data frame containing data for a single analysis unit.
 #' @param unit_label Character (optional). The analysis_unit_id.
@@ -269,8 +406,8 @@ plot_cusum_process_unit <- function(df_unit,
   x_sym     <- rlang::sym(x_var)
   cusum_sym <- rlang::sym(cusum_var)
   
-  # Calculate smart x-axis breaks
-  my_breaks <- get_smart_breaks(df_unit, x_var)
+  month_axis <- get_calendar_month_axis(df_unit, x_var)
+  weekly_ticks <- setdiff(get_weekly_axis_ticks(df_unit, x_var), month_axis$breaks)
   
   # Filter data to get ONLY the rows where an alarm occurred
   alarms_only <- df_unit[df_unit[[alarm_var]] == TRUE, ]
@@ -283,28 +420,99 @@ plot_cusum_process_unit <- function(df_unit,
     arl0, rr_label, h, k, rate_label
   )
 
-  y_breaks <- sort(unique(c(pretty(df_unit[[cusum_var]]), h)))
+  # A distant threshold can make a healthy, near-zero CUSUM process occupy
+  # only a few pixels at the bottom of a linear chart. In that situation,
+  # focus the view on the observed process and state clearly that h is above
+  # the visible range. Keep the full threshold view once scores get close
+  # enough to h to make the comparison informative.
+  cusum_values <- suppressWarnings(as.numeric(df_unit[[cusum_var]]))
+  cusum_values <- cusum_values[is.finite(cusum_values)]
+  if (length(cusum_values) == 0) {
+    cusum_values <- 0
+  }
+
+  observed_min <- min(cusum_values)
+  observed_max <- max(cusum_values)
+  zoom_lower <- min(0, observed_min)
+  observed_span <- max(observed_max - zoom_lower, abs(observed_max) * 0.1, 0.01)
+  zoom_candidate_upper <- observed_max + (observed_span * 0.15)
+  zoom_breaks <- pretty(c(zoom_lower, zoom_candidate_upper), n = 4)
+  zoom_upper <- max(zoom_candidate_upper, zoom_breaks[is.finite(zoom_breaks)])
+  zoom_breaks <- pretty(c(zoom_lower, zoom_upper), n = 4)
+  zoom_breaks <- zoom_breaks[
+    zoom_breaks >= zoom_lower & zoom_breaks <= zoom_upper
+  ]
+
+  # At less than 15% of h, the process is far enough below the threshold that
+  # a full scale obscures its week-to-week variation.
+  is_zoomed <- is.finite(h) && h > 0 && observed_max >= 0 &&
+    observed_max < (0.15 * h)
+
+  if (is_zoomed) {
+    param_subtitle <- paste0(
+      param_subtitle,
+      "\nY-axis zoomed to observed scores; h is above the displayed range."
+    )
+  }
+
+  y_breaks <- if (is_zoomed) {
+    zoom_breaks
+  } else {
+    sort(unique(c(pretty(df_unit[[cusum_var]]), h)))
+  }
   y_labels <- function(x) {
-    ifelse(abs(x - h) < .Machine$double.eps^0.5, paste0("h = ", format(round(h, 3), nsmall = 3)), as.character(x))
+    labels <- format(x, trim = TRUE, scientific = FALSE)
+    if (!is_zoomed && is.finite(h)) {
+      labels[abs(x - h) < .Machine$double.eps^0.5] <- paste0(
+        "h = ", format(round(h, 3), nsmall = 3)
+      )
+    }
+    labels
+  }
+
+  process_caption <- if (is_zoomed) {
+    paste(
+      "Y-axis zoomed to observed values; h is above view.",
+      "Scores remain below 15% of h.",
+      "CUSUM uses standardized weekly deviations.",
+      "Interpret burden per 100,000 people.",
+      sep = "\n"
+    )
+  } else {
+    paste(
+      "Red dashed: h threshold. Red points: alarm weeks.",
+      "CUSUM uses standardized weekly deviations.",
+      "Interpret burden per 100,000 people.",
+      sep = "\n"
+    )
   }
   
-  ggplot(df_unit, aes(x = !!x_sym, y = !!cusum_sym)) +
-    # 1. The main blue line (CUSUM Score)
-    geom_line(linewidth = 1, color = cusum_plot_colours$blue) +
-    
-    # 2. The dashed red threshold line
-    geom_hline(yintercept = h, linetype = "dashed", color = cusum_plot_colours$alarm, linewidth = 1) +
-    
-    # 3. Red dots for ALL alarms (Real-World Standard)
+  p <- ggplot(df_unit, aes(x = !!x_sym, y = !!cusum_sym)) +
+    geom_line(linewidth = 1, color = cusum_plot_colours$blue)
+
+  if (!is_zoomed) {
+    p <- p + geom_hline(
+      yintercept = h,
+      linetype = "dashed",
+      color = cusum_plot_colours$alarm,
+      linewidth = 1
+    )
+  }
+
+  p <- p +
     geom_point(data = alarms_only, aes(y = !!cusum_sym), size = 4, color = cusum_plot_colours$alarm) +
-    
-    scale_x_continuous(breaks = my_breaks, labels = function(b) smart_labs(b, df_unit)) +
+    scale_x_continuous(
+      breaks = month_axis$breaks,
+      labels = month_axis$labels,
+      minor_breaks = weekly_ticks,
+      guide = weekly_axis_guide()
+    ) +
     scale_y_continuous(breaks = y_breaks, labels = y_labels) +
-    labs(x = "Timeline\n(Week / Year)", 
+    labs(x = "Timeline\n(Month / Year)", 
          y = "CUSUM Score (S_n)", 
          title = "Standardized Residual CUSUM (reset at alarms)",
          subtitle = param_subtitle,
-         caption = "Red dashed line = h decision threshold. Red points = weeks where the CUSUM score reached or crossed h.\nThe CUSUM score is based on standardized weekly deviations; interpret location burden with prevalence per 100,000 people when population data are available.") +
+         caption = process_caption) +
     theme_minimal(base_size = base_size) +
     theme(
           plot.title = element_text(face = "bold", margin = margin(b = 6)),
@@ -312,8 +520,17 @@ plot_cusum_process_unit <- function(df_unit,
           plot.caption = element_text(size = base_size * 0.70, hjust = 0, lineheight = 1.10, margin = margin(t = 8)),
           axis.title.x = element_text(margin = margin(t = 8)),
           axis.title.y = element_text(margin = margin(r = 12)),
+          axis.line.x = element_line(),
+          axis.ticks.x = element_line(),
+          axis.ticks.length = grid::unit(0.15, "cm"),
           plot.margin = margin(12, 16, 18, 28),
           panel.grid.minor = element_blank())
+
+  if (is_zoomed) {
+    p <- p + coord_cartesian(ylim = c(zoom_lower, zoom_upper))
+  }
+
+  p
 }
 
 
@@ -321,7 +538,7 @@ plot_cusum_process_unit <- function(df_unit,
 #'
 #' @description
 #' Generates a heatmap summarizing alarm status across multiple units. 
-#' Automatically cleans analysis_unit_id labels and forces year changes 
+#' Automatically cleans analysis_unit_id labels and uses calendar-month labels
 #' on the X-axis.
 #'
 #' @param df Data frame containing the full dataset for multiple analysis units.
@@ -340,14 +557,27 @@ plot_cusum_alarms_overview <- function(df,
 
   # Clean unit labels using the selected hierarchy level. If two units share
   # the same displayed name, include the parent level to disambiguate them.
-  label_width <- if (isTRUE(compact)) 18 else 35
+  # Full-width heatmaps keep long labels intact; compact heatmaps retain a
+  # short, predictable label width so their plot panel remains usable.
+  label_width <- if (isTRUE(compact)) 22 else NULL
   df$clean_label <- make_heatmap_location_labels(df, unit_var = unit_var, max_width = label_width)
 
   x_sym     <- rlang::sym(x_var)
   unit_sym  <- rlang::sym("clean_label")
   alarm_sym <- rlang::sym(alarm_var)
 
-  my_breaks <- get_smart_breaks(df, x_var)
+  month_axis <- get_calendar_month_axis(df, x_var)
+  weekly_ticks <- setdiff(get_weekly_axis_ticks(df, x_var), month_axis$breaks)
+
+  heatmap_subtitle <- if (isTRUE(compact)) {
+    paste(
+      "Red cells show weeks where the CUSUM threshold was exceeded.",
+      "Green cells show weeks with no alarm detected.",
+      sep = "\n"
+    )
+  } else {
+    "Red cells show weeks where the CUSUM threshold was exceeded. Green cells show weeks with no alarm detected."
+  }
 
   p <- ggplot(df, aes(x = !!x_sym, y = !!unit_sym, fill = !!alarm_sym)) +
     geom_tile(color = "white", linewidth = 0.2) +
@@ -372,30 +602,46 @@ plot_cusum_alarms_overview <- function(df,
         keyheight = grid::unit(0.45, "cm")
       )
     ) +
-    scale_x_continuous(breaks = my_breaks, labels = function(b) smart_labs(b, df)) +
+    scale_x_continuous(
+      breaks = month_axis$breaks,
+      labels = month_axis$labels,
+      minor_breaks = weekly_ticks,
+      guide = weekly_axis_guide()
+    ) +
     labs(
-      x = "Timeline\n(Week / Year)",
-      y = if (isTRUE(compact)) NULL else "Location",
+      x = "Timeline\n(Month / Year)",
+      y = "Location",
       title = "Outbreak Heatmap",
-      subtitle = "Red cells show weeks where the CUSUM threshold was exceeded. Green/grey cells show weeks with no alarm detected."
+      subtitle = heatmap_subtitle
     ) +
     theme_minimal(base_size = if (isTRUE(compact)) max(13, base_size - 5) else base_size) +
     theme(
       axis.text.x = element_text(angle = 0),
-      axis.text.y = if (isTRUE(compact)) element_blank() else element_text(),
-      axis.ticks.y = if (isTRUE(compact)) element_blank() else element_line(),
+      axis.text.y = element_text(
+        size = if (isTRUE(compact)) 9 else base_size * 0.75,
+        hjust = 1
+      ),
+      axis.title.y = element_text(margin = margin(r = 8)),
+      axis.line.x = element_line(),
+      axis.ticks.x = element_line(),
+      axis.ticks.y = element_line(),
+      axis.ticks.length = grid::unit(0.15, "cm"),
       plot.title = element_text(face = "bold"),
       plot.subtitle = element_text(
         size = if (isTRUE(compact)) max(11, base_size * 0.70) else base_size * 0.80,
-        color = "gray30"
+        color = "gray30",
+        lineheight = 1.08,
+        margin = margin(b = 6)
       ),
       legend.position = "bottom",
       legend.direction = "horizontal",
       legend.title = element_text(size = max(11, base_size * 0.75)),
       legend.text = element_text(size = max(10, base_size * 0.70)),
       legend.key.size = grid::unit(max(0.45, base_size / 28), "cm"),
+      plot.margin = margin(12, 16, 18, if (isTRUE(compact)) 58 else 24),
       panel.grid = element_blank()
     )
   
   p
 }
+

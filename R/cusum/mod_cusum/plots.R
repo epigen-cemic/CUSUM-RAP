@@ -71,10 +71,38 @@ cusum_server_plots <- function(state) {
           return(res)
         })
 
+        # Keep every heatmap row readable in the in-app preview. The export
+        # remains available for larger analyses, where a very tall browser
+        # plot would be harder to inspect than a full-resolution PNG.
+        heatmap_location_count <- reactive({
+          df <- analyzed_data()
+          if (is.null(df) || nrow(df) == 0 || !"analysis_unit_id" %in% names(df)) {
+            return(0L)
+          }
+          as.integer(dplyr::n_distinct(df$analysis_unit_id, na.rm = TRUE))
+        })
+
+        heatmap_preview_available <- reactive({
+          heatmap_location_count() <= heatmap_preview_max_locations
+        })
+
+        heatmap_height_px <- reactive({
+          max(
+            heatmap_base_height_px(),
+            heatmap_chrome_height_px() +
+              heatmap_location_count() * heatmap_min_row_height_px()
+          )
+        })
+
+        heatmap_download_height_in <- reactive({
+          # At 300 dpi this reserves roughly 60 px per location row.
+          max(7, 4.5 + heatmap_location_count() * 0.20)
+        })
+
         # 6. REACTIVE PLOT OBJECTS (The Logic Hub)
         # ---------------------------------------------------------
         heatmap_obj <- reactive({
-          req(analyzed_data())
+          req(analyzed_data(), heatmap_preview_available())
           plot_cusum_alarms_overview(analyzed_data(), base_size = plot_font_size())
         })
 
@@ -114,6 +142,22 @@ cusum_server_plots <- function(state) {
         # 7. RENDERING & BUTTON CONTROL
         # ---------------------------------------------------------
         output$plot_heatmap_ui <- renderUI({
+          if (!isTRUE(heatmap_preview_available())) {
+            return(
+              div(
+                class = "heatmap-preview-notice",
+                tags$strong("Heatmap preview not shown"),
+                tags$p(
+                  sprintf(
+                    "This analysis has %s locations. To keep every heatmap row readable, the in-app preview is limited to %s locations. Use Download Heatmap to view the complete PNG.",
+                    format(heatmap_location_count(), big.mark = ","),
+                    heatmap_preview_max_locations
+                  )
+                )
+              )
+            )
+          }
+
           plotOutput(ns("plot_heatmap"), height = paste0(heatmap_height_px(), "px"))
         })
 
@@ -125,7 +169,10 @@ cusum_server_plots <- function(state) {
           plotOutput(ns("plot_cusum_process"), height = paste0(plot_height_px(), "px"))
         })
 
-        output$plot_heatmap <- renderPlot({ heatmap_obj() }, height = function() heatmap_height_px())
+        output$plot_heatmap <- renderPlot({
+          req(heatmap_preview_available())
+          heatmap_obj()
+        }, height = function() heatmap_height_px())
         output$plot_series  <- renderPlot({ series_plot_obj() }, height = function() plot_height_px())
         output$plot_cusum_process <- renderPlot({ process_plot_obj() }, height = function() plot_height_px())
   }, envir = state)

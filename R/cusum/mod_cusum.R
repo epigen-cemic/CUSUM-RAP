@@ -22,7 +22,59 @@ cusumUI <- function(id) {
   fluidPage(
     shinyjs::useShinyjs(),
     tags$head(
-      tags$link(rel = "stylesheet", type = "text/css", href = "config.css")
+      tags$link(rel = "stylesheet", type = "text/css", href = "config.css"),
+      tags$script(HTML(sprintf("
+        (function () {
+          var isLoadingOutput = false;
+          var overlaySelector = '#%s';
+          var runAnalysisInputId = '%s';
+          var plotOutputIds = ['%s', '%s', '%s'];
+
+          function isCusumPlot(event) {
+            return plotOutputIds.indexOf(event.name) !== -1;
+          }
+
+          function showCusumLoading() {
+            isLoadingOutput = true;
+            $(overlaySelector)
+              .addClass('is-visible')
+              .attr('aria-hidden', 'false');
+          }
+
+          function hideCusumLoading() {
+            isLoadingOutput = false;
+            $(overlaySelector)
+              .removeClass('is-visible')
+              .attr('aria-hidden', 'true');
+          }
+
+          $(document)
+            .off('shiny:inputchanged.cusumLoading')
+            .on('shiny:inputchanged.cusumLoading', function (event) {
+              if (event.name === runAnalysisInputId) {
+                showCusumLoading();
+              }
+            })
+            .off('shiny:outputinvalidated.cusumLoading')
+            .on('shiny:outputinvalidated.cusumLoading', function (event) {
+              if (isCusumPlot(event)) {
+                showCusumLoading();
+              }
+            })
+            .off('shiny:idle.cusumLoading')
+            .on('shiny:idle.cusumLoading', function () {
+              if (isLoadingOutput) {
+                hideCusumLoading();
+              }
+            });
+        }());
+      ",
+        ns("loading_overlay"),
+        ns("run_analysis"),
+        ns("plot_heatmap"),
+        ns("plot_series"),
+        ns("plot_cusum_process")
+      )))
     ),
     
     # --- TIER 1: TOP NAVIGATION BAR ---
@@ -104,6 +156,16 @@ cusumUI <- function(id) {
                                      br(),
                                      tags$p(class = "output-description",
                                             "Alerts are early warnings and require further epidemiological review. The detection period controls the recent weeks monitored for alarms."),
+                                     div(
+                                       class = "overview-actions",
+                                       shinyjs::disabled(
+                                         downloadButton(
+                                           ns("download_heatmap_plot"),
+                                           "Download Heatmap",
+                                           class = "btn-info"
+                                         )
+                                       )
+                                     ),
                                      uiOutput(ns("plot_heatmap_ui"))),
                            tabPanel("Detailed View", 
                                      br(),
@@ -169,7 +231,26 @@ cusumUI <- function(id) {
               ) # Close column 9
             ) # Close fluidRow
         ) # Close well-custom
-    ) # Close content-wrapper
+    ), # Close content-wrapper
+    tags$div(
+      id = ns("loading_overlay"),
+      class = "cusum-loading-overlay",
+      role = "status",
+      `aria-live` = "polite",
+      `aria-hidden` = "true",
+      tags$div(
+        class = "cusum-loading-dialog",
+        tags$div(
+          class = "cusum-loading-spinner",
+          `aria-hidden` = "true"
+        ),
+        tags$div(class = "cusum-loading-title", "Loading..."),
+        tags$div(
+          class = "cusum-loading-message",
+          "Processing data and updating results."
+        )
+      )
+    )
   ) # Close fluidPage
 }
 

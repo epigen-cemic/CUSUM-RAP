@@ -149,7 +149,10 @@ cusum_server_helpers <- function(state) {
                  500)
         })
 
-        heatmap_height_px <- reactive({
+        # Heatmap height is calculated in plots.R after the analyzed data are
+        # available. These values keep every row legible as the location count
+        # grows while preserving the existing compact view for short heatmaps.
+        heatmap_base_height_px <- reactive({
           switch(current_font_size_key(),
                  "small" = 600,
                  "medium" = 680,
@@ -157,6 +160,26 @@ cusum_server_helpers <- function(state) {
                  "xlarge" = 840,
                  600)
         })
+
+        heatmap_chrome_height_px <- reactive({
+          switch(current_font_size_key(),
+                 "small" = 360,
+                 "medium" = 400,
+                 "large" = 440,
+                 "xlarge" = 480,
+                 360)
+        })
+
+        heatmap_min_row_height_px <- reactive({
+          switch(current_font_size_key(),
+                 "small" = 20,
+                 "medium" = 22,
+                 "large" = 24,
+                 "xlarge" = 26,
+                 20)
+        })
+
+        heatmap_preview_max_locations <- 80L
 
         download_plot_width_in <- reactive({
           switch(current_font_size_key(),

@@ -154,10 +154,12 @@ cusum_server_tables <- function(state) {
         observe({
           if (isTruthy(analyzed_data())) {
             shinyjs::enable("download_data")
+            shinyjs::enable("download_heatmap_plot")
             shinyjs::enable("download_series_plot")
             shinyjs::enable("download_process_plot")
           } else {
             shinyjs::disable("download_data")
+            shinyjs::disable("download_heatmap_plot")
             shinyjs::disable("download_series_plot")
             shinyjs::disable("download_process_plot")
           }

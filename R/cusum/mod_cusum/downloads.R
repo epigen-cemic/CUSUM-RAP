@@ -4,6 +4,33 @@
 #' @return Invisibly returns `state`.
 cusum_server_downloads <- function(state) {
   evalq({
+        output$download_heatmap_plot <- downloadHandler(
+          filename = function() {
+            paste0("CUSUM_Overview_", Sys.Date(), ".png")
+          },
+          content = function(file) {
+            df <- analyzed_data()
+            req(df)
+
+            # Always export the complete, full-width heatmap even when the
+            # in-app preview is intentionally hidden for a large result set.
+            p <- plot_cusum_alarms_overview(
+              df,
+              compact = FALSE,
+              base_size = plot_font_size()
+            )
+            ggplot2::ggsave(
+              file,
+              plot = p,
+              device = "png",
+              width = 16,
+              height = heatmap_download_height_in(),
+              dpi = 300,
+              limitsize = FALSE
+            )
+          }
+        )
+
         output$download_series_plot <- downloadHandler(
           filename = function() {
             clean_name <- sub(".*\\|", "", selected_unit_id())
